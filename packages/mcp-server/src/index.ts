@@ -577,6 +577,20 @@ function parseAmountWithContext(
   }
 }
 
+function assertDistinctSwapTokens(
+  tokenIn: Token,
+  tokenOut: Token,
+  context: string
+): void {
+  const normalizedIn = fromAddress(tokenIn.address);
+  const normalizedOut = fromAddress(tokenOut.address);
+  if (normalizedIn === normalizedOut) {
+    throw new Error(
+      `${context}: tokenIn and tokenOut resolve to the same token (${sanitizeTokenSymbol(tokenIn.symbol)}).`
+    );
+  }
+}
+
 function assertOverallFeeIsBigInt(fee: unknown): asserts fee is {
   overall_fee: bigint;
 } {
@@ -1546,6 +1560,7 @@ async function handleTool(
       const parsed = args as z.infer<typeof schemas.starkzap_get_quote>;
       const tokenIn = resolveToken(parsed.tokenIn);
       const tokenOut = resolveToken(parsed.tokenOut);
+      assertDistinctSwapTokens(tokenIn, tokenOut, "Swap quote");
       const amountIn = parseAmountWithContext(
         parsed.amountIn,
         tokenIn,
@@ -1679,6 +1694,7 @@ async function handleTool(
       const parsed = args as z.infer<typeof schemas.starkzap_swap>;
       const tokenIn = resolveToken(parsed.tokenIn);
       const tokenOut = resolveToken(parsed.tokenOut);
+      assertDistinctSwapTokens(tokenIn, tokenOut, "Swap execution");
       const amountIn = parseAmountWithContext(parsed.amountIn, tokenIn, "swap");
       assertAmountWithinCap(amountIn, tokenIn, maxAmount);
       const feeMode: "sponsored" | undefined = parsed.sponsored
@@ -1720,6 +1736,7 @@ async function handleTool(
       const parsed = args as z.infer<typeof schemas.starkzap_build_swap_calls>;
       const tokenIn = resolveToken(parsed.tokenIn);
       const tokenOut = resolveToken(parsed.tokenOut);
+      assertDistinctSwapTokens(tokenIn, tokenOut, "Build swap calls");
       const amountIn = parseAmountWithContext(
         parsed.amountIn,
         tokenIn,

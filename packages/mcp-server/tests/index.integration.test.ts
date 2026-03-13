@@ -1,4 +1,4 @@
-import { Amount, fromAddress } from "starkzap";
+import { Amount, fromAddress, mainnetTokens } from "starkzap";
 import type { Token, Wallet } from "starkzap";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,6 +9,13 @@ const TEST_TOKEN: Token = {
     "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab0720189f9f3f75e66" as Token["address"],
   decimals: 18,
 };
+
+const KNOWN_MAINNET_TOKEN: Token = (() => {
+  const preferred = Object.values(mainnetTokens).find(
+    (token) => token.symbol.toUpperCase() === "STRK"
+  );
+  return preferred ?? TEST_TOKEN;
+})();
 
 type TestingExports = {
   withTimeout<T>(
@@ -431,6 +438,26 @@ describe("index integration hardening", () => {
     );
   });
 
+  it("rejects swap quote when tokenIn/tokenOut resolve to the same token", async () => {
+    const getQuote = vi.fn();
+    testing.setWalletSingleton({
+      getQuote,
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_get_quote",
+        arguments: {
+          tokenIn: KNOWN_MAINNET_TOKEN.symbol,
+          tokenOut: KNOWN_MAINNET_TOKEN.address,
+          amountIn: "1",
+        },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain("Operation failed. Reference:");
+    expect(getQuote).not.toHaveBeenCalled();
+  });
+
   it("builds unsigned swap calls without execution", async () => {
     const calls = [
       {
@@ -471,6 +498,30 @@ describe("index integration hardening", () => {
     expect(payload.calls?.[0]?.contractAddress).toBe(fromAddress("0x1"));
     expect(payload.calls?.[0]?.entrypoint).toBe("swap_exact_tokens");
     expect(payload.calls?.[0]?.calldata).toEqual(["0x1", "0x2", "3"]);
+  });
+
+  it("rejects build_swap_calls when tokenIn/tokenOut resolve to the same token", async () => {
+    const callsFn = vi.fn();
+    const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue({
+        swap: swapFn,
+      }),
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_swap_calls",
+        arguments: {
+          tokenIn: KNOWN_MAINNET_TOKEN.symbol,
+          tokenOut: KNOWN_MAINNET_TOKEN.address,
+          amountIn: "1",
+        },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain("Operation failed. Reference:");
+    expect(swapFn).not.toHaveBeenCalled();
+    expect(callsFn).not.toHaveBeenCalled();
   });
 
   it("keeps swap execution write-gated by default", async () => {
