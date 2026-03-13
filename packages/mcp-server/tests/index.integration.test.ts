@@ -380,6 +380,114 @@ describe("index integration hardening", () => {
     );
   });
 
+  it("returns batched balances for multiple tokens", async () => {
+    testing.setWalletSingleton({
+      balanceOf: vi.fn(async (token: Token) =>
+        token.symbol === "STRK"
+          ? Amount.parse("1.25", token)
+          : Amount.parse("2.5", token)
+      ),
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_get_balances",
+        arguments: { tokens: ["STRK", "USDC"] },
+      },
+    });
+    expect(response.isError).not.toBe(true);
+    const payload = JSON.parse(response.content[0]?.text ?? "{}") as {
+      balances?: Array<{ token?: string; balance?: string; raw?: string }>;
+    };
+    expect(payload.balances).toHaveLength(2);
+    expect(payload.balances?.[0]?.token).toBe("STRK");
+    expect(payload.balances?.[0]?.balance).toBe("1.25");
+    expect(payload.balances?.[1]?.token).toBe("USDC");
+    expect(payload.balances?.[1]?.balance).toBe("2.5");
+    expect(
+      payload.balances?.every((entry) => typeof entry.raw === "string")
+    ).toBe(true);
+  });
+
+  it("rejects malformed swap quote responses from SDK", async () => {
+    testing.setWalletSingleton({
+      getQuote: vi.fn().mockResolvedValue({
+        amountInBase: 1n,
+        amountOutBase: "not-bigint",
+      }),
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_get_quote",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain(
+      "Invalid swap quote returned by SDK"
+    );
+  });
+
+  it("builds unsigned swap calls without execution", async () => {
+    const calls = [
+      {
+        contractAddress: "0x1",
+        entrypoint: "swap_exact_tokens",
+        calldata: [1n, "0x2", 3],
+      },
+    ];
+    const callsFn = vi.fn().mockResolvedValue(calls);
+    const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue({
+        swap: swapFn,
+      }),
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_swap_calls",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+          slippageBps: 50,
+          provider: "avnu",
+        },
+      },
+    });
+    expect(response.isError).not.toBe(true);
+    const payload = JSON.parse(response.content[0]?.text ?? "{}") as {
+      calls?: Array<{
+        contractAddress: string;
+        entrypoint: string;
+        calldata: string[];
+      }>;
+    };
+    expect(swapFn).toHaveBeenCalledTimes(1);
+    expect(payload.calls).toHaveLength(1);
+    expect(payload.calls?.[0]?.contractAddress).toBe(fromAddress("0x1"));
+    expect(payload.calls?.[0]?.entrypoint).toBe("swap_exact_tokens");
+    expect(payload.calls?.[0]?.calldata).toEqual(["0x1", "0x2", "3"]);
+  });
+
+  it("keeps swap execution write-gated by default", async () => {
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_swap",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain("disabled by default");
+  });
+
   it("fails with clear message when fee estimate overall_fee is malformed", async () => {
     testing.setWalletSingleton({
       estimateFee: vi.fn().mockResolvedValue({

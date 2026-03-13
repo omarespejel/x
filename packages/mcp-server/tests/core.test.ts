@@ -144,6 +144,22 @@ describe("schema hardening", () => {
     expect(parsed.success).toBe(false);
   });
 
+  it("bounds get-balances token batches at 32", () => {
+    const tokens = Array.from({ length: 33 }, (_, index) => `TOKEN_${index}`);
+    const parsed = schemas.starkzap_get_balances.safeParse({ tokens });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("validates swap slippage bps bounds", () => {
+    const parsed = schemas.starkzap_get_quote.safeParse({
+      tokenIn: "STRK",
+      tokenOut: "USDC",
+      amountIn: "1",
+      slippageBps: 10_000,
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it("bounds calldata payload size", () => {
     const oversized = "a".repeat(257);
     const parsed = schemas.starkzap_execute.safeParse({
@@ -219,6 +235,10 @@ describe("tool gating and parity", () => {
     });
     const names = new Set(readOnlyOnly.map((tool) => tool.name));
     expect(names.has("starkzap_get_account")).toBe(true);
+    expect(names.has("starkzap_get_balances")).toBe(true);
+    expect(names.has("starkzap_get_quote")).toBe(true);
+    expect(names.has("starkzap_build_swap_calls")).toBe(true);
+    expect(names.has("starkzap_swap")).toBe(false);
   });
 
   it("hides staking tools when staking config is absent", () => {
