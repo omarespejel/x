@@ -160,6 +160,41 @@ describe("schema hardening", () => {
     expect(parsed.success).toBe(false);
   });
 
+  it("rejects same token pairs in swap schemas", () => {
+    const parsed = schemas.starkzap_get_quote.safeParse({
+      tokenIn: "STRK",
+      tokenOut: "strk",
+      amountIn: "1",
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejects unknown fields in hardened swap/get-balances schemas", () => {
+    const balancesParsed = schemas.starkzap_get_balances.safeParse({
+      tokens: ["STRK"],
+      unexpected: true,
+    });
+    expect(balancesParsed.success).toBe(false);
+
+    const quoteParsed = schemas.starkzap_get_quote.safeParse({
+      tokenIn: "STRK",
+      tokenOut: "USDC",
+      amountIn: "1",
+      unexpected: true,
+    });
+    expect(quoteParsed.success).toBe(false);
+  });
+
+  it("bounds token identifiers in swap schemas", () => {
+    const tooLong = "A".repeat(129);
+    const parsed = schemas.starkzap_get_quote.safeParse({
+      tokenIn: tooLong,
+      tokenOut: "USDC",
+      amountIn: "1",
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it("bounds calldata payload size", () => {
     const oversized = "a".repeat(257);
     const parsed = schemas.starkzap_execute.safeParse({

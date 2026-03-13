@@ -283,20 +283,44 @@ export const amountSchema = z
     message: "Amount must be greater than zero",
   });
 
+const tokenIdentifierSchema = z
+  .string()
+  .min(1)
+  .max(128, "Token identifier too long (max 128 chars)");
+
 const tokenBatchSchema = z
-  .array(z.string().min(1))
+  .array(tokenIdentifierSchema)
   .min(1)
   .max(32, "Maximum 32 tokens per balance batch");
 
 const slippageBpsSchema = z.number().int().min(0).max(9999);
+const providerSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(
+    /^[A-Za-z0-9._:-]+$/,
+    "Provider id may only contain letters, numbers, dot, underscore, colon, and hyphen"
+  );
 
-const swapInputSchema = z.object({
-  tokenIn: z.string().min(1),
-  tokenOut: z.string().min(1),
-  amountIn: amountSchema,
-  slippageBps: slippageBpsSchema.optional(),
-  provider: z.string().min(1).max(64).optional(),
-});
+const swapInputBaseSchema = z
+  .object({
+    tokenIn: tokenIdentifierSchema,
+    tokenOut: tokenIdentifierSchema,
+    amountIn: amountSchema,
+    slippageBps: slippageBpsSchema.optional(),
+    provider: providerSchema.optional(),
+  })
+  .strict();
+
+const swapInputSchema = swapInputBaseSchema.refine(
+  (value) =>
+    value.tokenIn.trim().toLowerCase() !== value.tokenOut.trim().toLowerCase(),
+  {
+    message: "tokenIn and tokenOut must be different",
+    path: ["tokenOut"],
+  }
+);
 
 const entrypointSchema = z
   .string()
@@ -326,9 +350,11 @@ export const schemas = {
   starkzap_get_balance: z.object({
     token: z.string().min(1),
   }),
-  starkzap_get_balances: z.object({
-    tokens: tokenBatchSchema,
-  }),
+  starkzap_get_balances: z
+    .object({
+      tokens: tokenBatchSchema,
+    })
+    .strict(),
   starkzap_transfer: z.object({
     token: z.string().min(1),
     transfers: z
@@ -395,9 +421,19 @@ export const schemas = {
       .max(10, "Maximum 10 calls per estimate batch"),
   }),
   starkzap_get_quote: swapInputSchema,
-  starkzap_swap: swapInputSchema.extend({
-    sponsored: z.boolean().optional(),
-  }),
+  starkzap_swap: swapInputBaseSchema
+    .extend({
+      sponsored: z.boolean().optional(),
+    })
+    .refine(
+      (value) =>
+        value.tokenIn.trim().toLowerCase() !==
+        value.tokenOut.trim().toLowerCase(),
+      {
+        message: "tokenIn and tokenOut must be different",
+        path: ["tokenOut"],
+      }
+    ),
   starkzap_build_swap_calls: swapInputSchema,
 } as const;
 
@@ -452,6 +488,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
       },
       inputSchema: {
         type: "object" as const,
+        additionalProperties: false,
         properties: {
           tokens: {
             type: "array",
@@ -579,6 +616,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
       },
       inputSchema: {
         type: "object" as const,
+        additionalProperties: false,
         properties: {
           tokenIn: {
             type: "string",
@@ -623,6 +661,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
       },
       inputSchema: {
         type: "object" as const,
+        additionalProperties: false,
         properties: {
           tokenIn: {
             type: "string",
@@ -671,6 +710,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
       },
       inputSchema: {
         type: "object" as const,
+        additionalProperties: false,
         properties: {
           tokenIn: {
             type: "string",
@@ -1004,14 +1044,28 @@ function getArrayBounds(
   };
 }
 
+function getObjectSchema(type: z.ZodTypeAny): z.AnyZodObject | null {
+  const unwrapped = unwrapZodType(type);
+  if (unwrapped instanceof z.ZodObject) {
+    return unwrapped;
+  }
+  return null;
+}
+
 export function schemaParityMismatches(tools: readonly Tool[]): string[] {
   const mismatches: string[] = [];
   const schemaEntries = Object.entries(schemas) as Array<
-    [keyof typeof schemas, z.AnyZodObject]
+    [keyof typeof schemas, z.ZodTypeAny]
   >;
   const toolByName = new Map(tools.map((tool) => [tool.name, tool]));
 
-  for (const [name, schema] of schemaEntries) {
+  for (const [name, rawSchema] of schemaEntries) {
+    const schema = getObjectSchema(rawSchema);
+    if (!schema) {
+      mismatches.push(`Schema "${name}" is not an object schema`);
+      continue;
+    }
+
     const tool = toolByName.get(name);
     if (!tool) {
       mismatches.push(`Missing tool definition for schema "${name}"`);
