@@ -283,6 +283,21 @@ export const amountSchema = z
     message: "Amount must be greater than zero",
   });
 
+const tokenBatchSchema = z
+  .array(z.string().min(1))
+  .min(1)
+  .max(32, "Maximum 32 tokens per balance batch");
+
+const slippageBpsSchema = z.number().int().min(0).max(9999);
+
+const swapInputSchema = z.object({
+  tokenIn: z.string().min(1),
+  tokenOut: z.string().min(1),
+  amountIn: amountSchema,
+  slippageBps: slippageBpsSchema.optional(),
+  provider: z.string().min(1).max(64).optional(),
+});
+
 const entrypointSchema = z
   .string()
   .max(64, "Entrypoint name too long (max 64 chars)")
@@ -310,6 +325,9 @@ export const schemas = {
   starkzap_get_account: z.object({}),
   starkzap_get_balance: z.object({
     token: z.string().min(1),
+  }),
+  starkzap_get_balances: z.object({
+    tokens: tokenBatchSchema,
   }),
   starkzap_transfer: z.object({
     token: z.string().min(1),
@@ -376,6 +394,11 @@ export const schemas = {
       .min(1)
       .max(10, "Maximum 10 calls per estimate batch"),
   }),
+  starkzap_get_quote: swapInputSchema,
+  starkzap_swap: swapInputSchema.extend({
+    sponsored: z.boolean().optional(),
+  }),
+  starkzap_build_swap_calls: swapInputSchema,
 } as const;
 
 export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
@@ -415,6 +438,34 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
           },
         },
         required: ["token"],
+      },
+    },
+    {
+      name: "starkzap_get_balances",
+      description:
+        "Get ERC20 balances for multiple tokens in one tool call. Returns human-readable and raw values for each token.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          tokens: {
+            type: "array",
+            minItems: 1,
+            maxItems: 32,
+            items: {
+              type: "string",
+              description:
+                "Token symbol (ETH, STRK, USDC, etc.) or contract address",
+            },
+            description: "One or more token symbols/addresses (max 32)",
+          },
+        },
+        required: ["tokens"],
       },
     },
     {
@@ -513,6 +564,142 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
           },
         },
         required: ["calls"],
+      },
+    },
+    {
+      name: "starkzap_get_quote",
+      description:
+        `Get a swap quote for tokenIn -> tokenOut via the wallet's configured swap provider. ` +
+        `Maximum ${maxAmount} tokens for amountIn per operation.`,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          tokenIn: {
+            type: "string",
+            description: "Input token symbol or contract address",
+          },
+          tokenOut: {
+            type: "string",
+            description: "Output token symbol or contract address",
+          },
+          amountIn: {
+            type: "string",
+            maxLength: 32,
+            pattern: "^\\d+(\\.\\d+)?$",
+            description: 'Human-readable amount in tokenIn units (e.g. "10.5")',
+          },
+          slippageBps: {
+            type: "number",
+            minimum: 0,
+            maximum: 9999,
+            description: "Optional slippage tolerance in basis points (0-9999)",
+          },
+          provider: {
+            type: "string",
+            maxLength: 64,
+            description:
+              "Optional swap provider id (defaults to wallet provider, e.g. avnu)",
+          },
+        },
+        required: ["tokenIn", "tokenOut", "amountIn"],
+      },
+    },
+    {
+      name: "starkzap_swap",
+      description:
+        `Execute a token swap via the wallet's configured swap provider. ` +
+        `Maximum ${maxAmount} tokens for amountIn per operation.`,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          tokenIn: {
+            type: "string",
+            description: "Input token symbol or contract address",
+          },
+          tokenOut: {
+            type: "string",
+            description: "Output token symbol or contract address",
+          },
+          amountIn: {
+            type: "string",
+            maxLength: 32,
+            pattern: "^\\d+(\\.\\d+)?$",
+            description: 'Human-readable amount in tokenIn units (e.g. "10.5")',
+          },
+          slippageBps: {
+            type: "number",
+            minimum: 0,
+            maximum: 9999,
+            description: "Optional slippage tolerance in basis points (0-9999)",
+          },
+          provider: {
+            type: "string",
+            maxLength: 64,
+            description:
+              "Optional swap provider id (defaults to wallet provider, e.g. avnu)",
+          },
+          sponsored: {
+            type: "boolean",
+            description: "Use paymaster for gasless tx (default: false)",
+          },
+        },
+        required: ["tokenIn", "tokenOut", "amountIn"],
+      },
+    },
+    {
+      name: "starkzap_build_swap_calls",
+      description:
+        `Build unsigned swap calls (approval + route) without executing. ` +
+        `Maximum ${maxAmount} tokens for amountIn per operation.`,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          tokenIn: {
+            type: "string",
+            description: "Input token symbol or contract address",
+          },
+          tokenOut: {
+            type: "string",
+            description: "Output token symbol or contract address",
+          },
+          amountIn: {
+            type: "string",
+            maxLength: 32,
+            pattern: "^\\d+(\\.\\d+)?$",
+            description: 'Human-readable amount in tokenIn units (e.g. "10.5")',
+          },
+          slippageBps: {
+            type: "number",
+            minimum: 0,
+            maximum: 9999,
+            description: "Optional slippage tolerance in basis points (0-9999)",
+          },
+          provider: {
+            type: "string",
+            maxLength: 64,
+            description:
+              "Optional swap provider id (defaults to wallet provider, e.g. avnu)",
+          },
+        },
+        required: ["tokenIn", "tokenOut", "amountIn"],
       },
     },
     {
@@ -740,6 +927,9 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
 export const READ_ONLY_TOOLS = new Set([
   "starkzap_get_account",
   "starkzap_get_balance",
+  "starkzap_get_balances",
+  "starkzap_get_quote",
+  "starkzap_build_swap_calls",
   "starkzap_get_pool_position",
   "starkzap_estimate_fee",
 ]);
