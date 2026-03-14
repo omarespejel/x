@@ -131,6 +131,7 @@ function isSecureRpcUrl(rawUrl: string): boolean {
 
 const envSchema = z.object({
   STARKNET_PRIVATE_KEY: privateKeySchema,
+  STARKNET_ACCOUNT_ADDRESS: contractAddressSchema.optional(),
   STARKNET_RPC_URL: z
     .string()
     .url()
@@ -432,6 +433,9 @@ async function getWallet(): Promise<Wallet> {
         account: {
           signer: new StarkSigner(env.STARKNET_PRIVATE_KEY),
         },
+        ...(env.STARKNET_ACCOUNT_ADDRESS && {
+          accountAddress: env.STARKNET_ACCOUNT_ADDRESS,
+        }),
       })
     )
       .then((wallet) => {
@@ -1380,6 +1384,7 @@ function buildToolErrorText(error: unknown): string {
     "Total ",
     "Could ",
     "Rate ",
+    "Sponsored ",
     "Transaction ",
     "Address ",
     "starkzap_",
@@ -1515,6 +1520,12 @@ async function handleTool(
       const feeMode = parsed.sponsored
         ? ({ type: "paymaster" } as const)
         : undefined;
+      if (feeMode === "sponsored") {
+        await assertWalletAccountClassHash(
+          wallet,
+          "Sponsored transfer preflight"
+        );
+      }
       const tx = await withTimeout("Token transfer submission", () =>
         wallet.transfer(token, transfers, {
           ...(feeMode && { feeMode }),
@@ -1553,6 +1564,12 @@ async function handleTool(
       const feeMode = parsed.sponsored
         ? ({ type: "paymaster" } as const)
         : undefined;
+      if (feeMode === "sponsored") {
+        await assertWalletAccountClassHash(
+          wallet,
+          "Sponsored execute preflight"
+        );
+      }
       const tx = await withTimeout("Contract execution submission", () =>
         wallet.execute(calls, {
           ...(feeMode && { feeMode }),
@@ -1569,6 +1586,51 @@ async function handleTool(
         hash: txResult.hash,
         explorerUrl: txResult.explorerUrl,
         callCount: calls.length,
+      });
+    }
+
+    case "starkzap_swap": {
+      const parsed = args as z.infer<typeof schemas.starkzap_swap>;
+      const tokenIn = resolveToken(parsed.tokenIn);
+      const tokenOut = resolveToken(parsed.tokenOut);
+      assertDistinctSwapTokens(tokenIn, tokenOut, "Swap execution");
+      const amountIn = parseAmountWithContext(parsed.amountIn, tokenIn, "swap");
+      assertAmountWithinCap(amountIn, tokenIn, maxAmount);
+      const feeMode: "sponsored" | undefined = parsed.sponsored
+        ? "sponsored"
+        : undefined;
+      if (feeMode === "sponsored") {
+        await assertWalletAccountClassHash(wallet, "Sponsored swap preflight");
+      }
+      const tx = await withTimeout("Swap transaction submission", () =>
+        wallet.swap(
+          {
+            tokenIn,
+            tokenOut,
+            amountIn,
+            ...(parsed.slippageBps !== undefined && {
+              slippageBps: BigInt(parsed.slippageBps),
+            }),
+            ...(parsed.provider !== undefined && { provider: parsed.provider }),
+          },
+          {
+            ...(feeMode && { feeMode }),
+          }
+        )
+      );
+      const txResult = await waitForTrackedTransaction(tx);
+      if (feeMode === "sponsored") {
+        await assertWalletAccountClassHash(wallet, "Sponsored swap post-check");
+      }
+      return ok({
+        hash: txResult.hash,
+        explorerUrl: txResult.explorerUrl,
+        tokenIn: sanitizeTokenSymbol(tokenIn.symbol),
+        tokenInAddress: tokenIn.address,
+        tokenOut: sanitizeTokenSymbol(tokenOut.symbol),
+        tokenOutAddress: tokenOut.address,
+        amountIn: amountIn.toUnit(),
+        amountInRaw: amountIn.toBase().toString(),
       });
     }
 
