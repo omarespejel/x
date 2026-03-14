@@ -56,6 +56,7 @@ This server handles real funds. The following protections are built in:
 | Variable                             | Required | Description                                                                                     |
 | ------------------------------------ | -------- | ----------------------------------------------------------------------------------------------- |
 | `STARKNET_PRIVATE_KEY`               | Yes      | Stark curve private key (`0x` + exactly 64 hex chars, cryptographically valid)                  |
+| `STARKNET_ACCOUNT_ADDRESS`           | No       | Override derived account address (useful for funded/deployed accounts from existing setups)     |
 | `STARKNET_RPC_URL`                   | No       | Custom RPC endpoint (overrides network preset; HTTPS required except localhost HTTP)            |
 | `STARKNET_PAYMASTER_URL`             | No       | Custom paymaster endpoint for sponsored tx (HTTPS required except localhost HTTP)               |
 | `AVNU_PAYMASTER_API_KEY`             | No       | API key sent as `x-paymaster-api-key` for sponsored tx on AVNU paymaster                        |

@@ -83,6 +83,7 @@ beforeAll(async () => {
   process.env.STARKZAP_MCP_TEST_KEY_MARKER =
     "TEST_KEY_DO_NOT_USE_IN_PRODUCTION";
   process.env.STARKNET_PRIVATE_KEY = `0x${"1".padStart(64, "0")}`;
+  process.env.STARKNET_ACCOUNT_ADDRESS = "0x2";
   process.env.STARKNET_STAKING_CONTRACT =
     "0x03745ab04a431fc02871a139be6b93d9260b0ff3e779ad9c8b377183b23109f1";
   process.env.STARKNET_PAYMASTER_URL = "https://sepolia.paymaster.avnu.fi";
@@ -141,10 +142,20 @@ describe("index integration hardening", () => {
       /temporarily throttled after recent failures/
     );
     expect(connectWallet).toHaveBeenCalledTimes(1);
+    expect(connectWallet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountAddress: "0x2",
+      })
+    );
 
     testing.setNowProvider(() => 2_000);
     await expect(testing.getWallet()).resolves.toBeDefined();
     expect(connectWallet).toHaveBeenCalledTimes(2);
+    expect(connectWallet).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        accountAddress: "0x2",
+      })
+    );
   });
 
   it("wires paymaster URL and API key into SDK config", () => {
