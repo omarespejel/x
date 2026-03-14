@@ -314,6 +314,24 @@ describe("tool gating and parity", () => {
       expect(typeof tool.annotations?.destructiveHint).toBe("boolean");
     }
   });
+
+  it("keeps swap tool inputSchema constraints aligned with runtime validation", () => {
+    const tools = buildTools("100", "150");
+    const quoteTool = tools.find((tool) => tool.name === "starkzap_get_quote");
+    expect(quoteTool).toBeDefined();
+
+    const inputSchema = quoteTool?.inputSchema as
+      | {
+          properties?: Record<string, { maxLength?: number; pattern?: string }>;
+        }
+      | undefined;
+    expect(inputSchema?.properties?.tokenIn?.maxLength).toBe(128);
+    expect(inputSchema?.properties?.tokenOut?.maxLength).toBe(128);
+    expect(inputSchema?.properties?.provider?.maxLength).toBe(64);
+    expect(inputSchema?.properties?.provider?.pattern).toBe(
+      "^[A-Za-z0-9._:-]+$"
+    );
+  });
 });
 
 describe("amount and token guards", () => {

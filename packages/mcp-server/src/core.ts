@@ -620,10 +620,12 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
         properties: {
           tokenIn: {
             type: "string",
+            maxLength: 128,
             description: "Input token symbol or contract address",
           },
           tokenOut: {
             type: "string",
+            maxLength: 128,
             description: "Output token symbol or contract address",
           },
           amountIn: {
@@ -641,6 +643,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
           provider: {
             type: "string",
             maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
             description:
               "Optional swap provider id (defaults to wallet provider, e.g. avnu)",
           },
@@ -665,10 +668,12 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
         properties: {
           tokenIn: {
             type: "string",
+            maxLength: 128,
             description: "Input token symbol or contract address",
           },
           tokenOut: {
             type: "string",
+            maxLength: 128,
             description: "Output token symbol or contract address",
           },
           amountIn: {
@@ -686,6 +691,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
           provider: {
             type: "string",
             maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
             description:
               "Optional swap provider id (defaults to wallet provider, e.g. avnu)",
           },
@@ -714,10 +720,12 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
         properties: {
           tokenIn: {
             type: "string",
+            maxLength: 128,
             description: "Input token symbol or contract address",
           },
           tokenOut: {
             type: "string",
+            maxLength: 128,
             description: "Output token symbol or contract address",
           },
           amountIn: {
@@ -735,6 +743,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
           provider: {
             type: "string",
             maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
             description:
               "Optional swap provider id (defaults to wallet provider, e.g. avnu)",
           },

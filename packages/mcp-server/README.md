@@ -66,16 +66,16 @@ This server handles real funds. The following protections are built in:
 
 ### CLI Arguments
 
-| Argument                 | Default                | Description                                                                                                                                                                           |
-| ------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--network`              | `mainnet`              | Network preset: `mainnet` or `sepolia` (validated at startup)                                                                                                                         |
-| `--max-amount`           | `1000`                 | Max tokens per individual amount-bearing operation                                                                                                                                    |
-| `--max-batch-amount`     | `same as --max-amount` | Max total tokens across one `starkzap_transfer` batch call                                                                                                                            |
-| `--rate-limit-rpm`       | `0` (disabled)         | Global MCP tool-call rate limit per minute                                                                                                                                            |
-| `--read-rate-limit-rpm`  | `0` (disabled)         | Optional read-only bucket (`starkzap_get_balance`, `starkzap_get_balances`, `starkzap_get_quote`, `starkzap_build_swap_calls`, `starkzap_get_pool_position`, `starkzap_estimate_fee`) |
-| `--write-rate-limit-rpm` | `0` (disabled)         | Optional state-changing bucket (transfer/staking/deploy/execute)                                                                                                                      |
-| `--enable-write`         | off                    | Enable state-changing tools (transfer, stake, deploy)                                                                                                                                 |
-| `--enable-execute`       | off                    | Enable only the unrestricted `starkzap_execute` tool                                                                                                                                  |
+| Argument                 | Default                | Description                                                                                                                                                                                                   |
+| ------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--network`              | `mainnet`              | Network preset: `mainnet` or `sepolia` (validated at startup)                                                                                                                                                 |
+| `--max-amount`           | `1000`                 | Max tokens per individual amount-bearing operation                                                                                                                                                            |
+| `--max-batch-amount`     | `same as --max-amount` | Max total tokens across one `starkzap_transfer` batch call                                                                                                                                                    |
+| `--rate-limit-rpm`       | `0` (disabled)         | Global MCP tool-call rate limit per minute                                                                                                                                                                    |
+| `--read-rate-limit-rpm`  | `0` (disabled)         | Optional read-only bucket (`starkzap_get_account`, `starkzap_get_balance`, `starkzap_get_balances`, `starkzap_get_quote`, `starkzap_build_swap_calls`, `starkzap_get_pool_position`, `starkzap_estimate_fee`) |
+| `--write-rate-limit-rpm` | `0` (disabled)         | Optional state-changing bucket (transfer/swap/staking/deploy/execute)                                                                                                                                         |
+| `--enable-write`         | off                    | Enable state-changing tools (transfer, stake, deploy)                                                                                                                                                         |
+| `--enable-execute`       | off                    | Enable only the unrestricted `starkzap_execute` tool                                                                                                                                                          |
 
 ## MCP Client Configuration
 
