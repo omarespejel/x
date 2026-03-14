@@ -664,6 +664,7 @@ function normalizeCallCalldataForResponse(
 ): string[] {
   const MAX_CALLDATA_ITEMS = 2048;
   const MAX_CALLDATA_ITEM_CHARS = 256;
+  const MAX_FELT_HEX_CHARS = 64;
   const CALLDATA_DECIMAL_REGEX = /^\d+$/;
   const CALLDATA_HEX_REGEX = /^0x[0-9a-fA-F]{1,64}$/;
 
@@ -684,7 +685,13 @@ function normalizeCallCalldataForResponse(
           `Invalid ${label} returned by SDK: calldata_${index} must be non-negative.`
         );
       }
-      return `0x${item.toString(16)}`;
+      const hexValue = item.toString(16);
+      if (hexValue.length > MAX_FELT_HEX_CHARS) {
+        throw new Error(
+          `Invalid ${label} returned by SDK: calldata_${index} exceeds felt range.`
+        );
+      }
+      return `0x${hexValue}`;
     }
     if (typeof item === "number") {
       if (!Number.isSafeInteger(item) || item < 0) {
@@ -702,6 +709,12 @@ function normalizeCallCalldataForResponse(
         );
       }
       if (CALLDATA_DECIMAL_REGEX.test(trimmed)) {
+        const decimalValue = BigInt(trimmed);
+        if (decimalValue.toString(16).length > MAX_FELT_HEX_CHARS) {
+          throw new Error(
+            `Invalid ${label} returned by SDK: calldata_${index} exceeds felt range.`
+          );
+        }
         return trimmed;
       }
       if (CALLDATA_HEX_REGEX.test(trimmed)) {
@@ -1798,6 +1811,28 @@ async function handleTool(
       const formattedCalls = rawCalls.map((call, index) =>
         normalizeCallForResponse(call, `swap_call_${index}`)
       );
+      const totalCalldataItems = formattedCalls.reduce(
+        (sum, call) => sum + call.calldata.length,
+        0
+      );
+      const MAX_SWAP_CALLDATA_ITEMS = 4096;
+      if (totalCalldataItems > MAX_SWAP_CALLDATA_ITEMS) {
+        throw new Error(
+          `Invalid swap calls returned by SDK: calldata item count exceeds ${MAX_SWAP_CALLDATA_ITEMS}.`
+        );
+      }
+      const totalCalldataChars = formattedCalls.reduce(
+        (sum, call) =>
+          sum +
+          call.calldata.reduce((callSum, value) => callSum + value.length, 0),
+        0
+      );
+      const MAX_SWAP_CALLDATA_CHARS = 65_536;
+      if (totalCalldataChars > MAX_SWAP_CALLDATA_CHARS) {
+        throw new Error(
+          `Invalid swap calls returned by SDK: calldata payload exceeds ${MAX_SWAP_CALLDATA_CHARS} characters.`
+        );
+      }
       return ok({
         tokenIn: sanitizeTokenSymbol(tokenIn.symbol),
         tokenInAddress: tokenIn.address,
