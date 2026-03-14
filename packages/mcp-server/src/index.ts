@@ -608,6 +608,7 @@ function assertSwapQuoteShape(quote: unknown): asserts quote is {
   priceImpactBps?: bigint | null;
   provider?: string;
 } {
+  const PROVIDER_ID_REGEX = /^[A-Za-z0-9._:-]+$/;
   if (!isRecord(quote)) {
     throw new Error(
       "Invalid swap quote returned by SDK: expected object shape."
@@ -644,9 +645,15 @@ function assertSwapQuoteShape(quote: unknown): asserts quote is {
       "Invalid swap quote returned by SDK: priceImpactBps must be bigint or null."
     );
   }
-  if (quote.provider !== undefined && typeof quote.provider !== "string") {
+  if (
+    quote.provider !== undefined &&
+    (typeof quote.provider !== "string" ||
+      quote.provider.length === 0 ||
+      quote.provider.length > 64 ||
+      !PROVIDER_ID_REGEX.test(quote.provider))
+  ) {
     throw new Error(
-      "Invalid swap quote returned by SDK: provider must be a string."
+      "Invalid swap quote returned by SDK: provider must be a safe provider id."
     );
   }
 }
@@ -674,7 +681,7 @@ function normalizeCallCalldataForResponse(
     if (typeof item === "bigint") {
       if (item < 0n) {
         throw new Error(
-          `Invalid ${label} returned by SDK: calldata[${index}] must be non-negative.`
+          `Invalid ${label} returned by SDK: calldata_${index} must be non-negative.`
         );
       }
       return `0x${item.toString(16)}`;
@@ -682,7 +689,7 @@ function normalizeCallCalldataForResponse(
     if (typeof item === "number") {
       if (!Number.isSafeInteger(item) || item < 0) {
         throw new Error(
-          `Invalid ${label} returned by SDK: calldata[${index}] must be a non-negative safe integer.`
+          `Invalid ${label} returned by SDK: calldata_${index} must be a non-negative safe integer.`
         );
       }
       return item.toString(10);
@@ -691,7 +698,7 @@ function normalizeCallCalldataForResponse(
       const trimmed = item.trim();
       if (!trimmed || trimmed.length > MAX_CALLDATA_ITEM_CHARS) {
         throw new Error(
-          `Invalid ${label} returned by SDK: calldata[${index}] must be a felt-like hex or decimal string.`
+          `Invalid ${label} returned by SDK: calldata_${index} must be a felt-like hex or decimal string.`
         );
       }
       if (CALLDATA_DECIMAL_REGEX.test(trimmed)) {
@@ -701,11 +708,11 @@ function normalizeCallCalldataForResponse(
         return trimmed;
       }
       throw new Error(
-        `Invalid ${label} returned by SDK: calldata[${index}] must be a felt-like hex or decimal string.`
+        `Invalid ${label} returned by SDK: calldata_${index} must be a felt-like hex or decimal string.`
       );
     }
     throw new Error(
-      `Invalid ${label} returned by SDK: calldata[${index}] has unsupported type.`
+      `Invalid ${label} returned by SDK: calldata_${index} has unsupported type.`
     );
   });
 }
@@ -714,6 +721,7 @@ function normalizeCallForResponse(
   call: unknown,
   label: string
 ): { contractAddress: Address; entrypoint: string; calldata: string[] } {
+  const ENTRYPOINT_IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
   if (!isRecord(call)) {
     throw new Error(
       `Invalid ${label} returned by SDK: call must be an object.`
@@ -728,17 +736,20 @@ function normalizeCallForResponse(
     call.contractAddress,
     "contract"
   );
+  const entrypoint =
+    typeof call.entrypoint === "string" ? call.entrypoint.trim() : "";
   if (
-    typeof call.entrypoint !== "string" ||
-    call.entrypoint.trim().length === 0
+    entrypoint.length === 0 ||
+    entrypoint.length > 64 ||
+    !ENTRYPOINT_IDENTIFIER_REGEX.test(entrypoint)
   ) {
     throw new Error(
-      `Invalid ${label} returned by SDK: entrypoint must be a non-empty string.`
+      `Invalid ${label} returned by SDK: entrypoint must be a valid Cairo identifier.`
     );
   }
   return {
     contractAddress,
-    entrypoint: call.entrypoint.trim(),
+    entrypoint,
     calldata: normalizeCallCalldataForResponse(call.calldata ?? [], label),
   };
 }
@@ -1761,7 +1772,7 @@ async function handleTool(
         "build_swap_calls"
       );
       assertAmountWithinCap(amountIn, tokenIn, maxAmount);
-      const calls = await withTimeout("Swap call build", async () =>
+      const rawCalls = await withTimeout("Swap call build", async () =>
         wallet
           .tx()
           .swap({
@@ -1775,8 +1786,17 @@ async function handleTool(
           })
           .calls()
       );
-      const formattedCalls = calls.map((call, index) =>
-        normalizeCallForResponse(call, `swap call[${index}]`)
+      if (
+        !Array.isArray(rawCalls) ||
+        rawCalls.length === 0 ||
+        rawCalls.length > 10
+      ) {
+        throw new Error(
+          "Invalid swap calls returned by SDK: expected 1-10 calls."
+        );
+      }
+      const formattedCalls = rawCalls.map((call, index) =>
+        normalizeCallForResponse(call, `swap_call_${index}`)
       );
       return ok({
         tokenIn: sanitizeTokenSymbol(tokenIn.symbol),

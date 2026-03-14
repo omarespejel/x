@@ -496,6 +496,8 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
             maxItems: 32,
             items: {
               type: "string",
+              minLength: 1,
+              maxLength: 128,
               description:
                 "Token symbol (ETH, STRK, USDC, etc.) or contract address",
             },

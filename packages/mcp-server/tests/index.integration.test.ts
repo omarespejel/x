@@ -438,6 +438,30 @@ describe("index integration hardening", () => {
     );
   });
 
+  it("rejects unsafe provider ids in swap quote responses", async () => {
+    testing.setWalletSingleton({
+      getQuote: vi.fn().mockResolvedValue({
+        amountInBase: 1n,
+        amountOutBase: 2n,
+        provider: "bad provider\nid",
+      }),
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_get_quote",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain(
+      "Invalid swap quote returned by SDK: provider must be a safe provider id."
+    );
+  });
+
   it("rejects swap quote when tokenIn/tokenOut resolve to the same token", async () => {
     const getQuote = vi.fn();
     testing.setWalletSingleton({
@@ -527,7 +551,9 @@ describe("index integration hardening", () => {
     });
 
     expect(response.isError).toBe(true);
-    expect(response.content[0]?.text).toContain("Operation failed. Reference:");
+    expect(response.content[0]?.text).toContain(
+      "Invalid swap_call_0 returned by SDK: calldata_0 must be a non-negative safe integer."
+    );
   });
 
   it("rejects build_swap_calls when calldata contains invalid strings", async () => {
@@ -557,7 +583,9 @@ describe("index integration hardening", () => {
     });
 
     expect(response.isError).toBe(true);
-    expect(response.content[0]?.text).toContain("Operation failed. Reference:");
+    expect(response.content[0]?.text).toContain(
+      "Invalid swap_call_0 returned by SDK: calldata_0 must be a felt-like hex or decimal string."
+    );
   });
 
   it("rejects build_swap_calls when tokenIn/tokenOut resolve to the same token", async () => {
@@ -582,6 +610,60 @@ describe("index integration hardening", () => {
     expect(response.content[0]?.text).toContain("Operation failed. Reference:");
     expect(swapFn).not.toHaveBeenCalled();
     expect(callsFn).not.toHaveBeenCalled();
+  });
+
+  it("rejects build_swap_calls when SDK returns non-array calls", async () => {
+    const callsFn = vi.fn().mockResolvedValue("not-an-array");
+    const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue({
+        swap: swapFn,
+      }),
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_swap_calls",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain(
+      "Invalid swap calls returned by SDK: expected 1-10 calls."
+    );
+  });
+
+  it("rejects build_swap_calls when SDK returns invalid entrypoint names", async () => {
+    const callsFn = vi.fn().mockResolvedValue([
+      {
+        contractAddress: "0x1",
+        entrypoint: "transfer!",
+        calldata: [],
+      },
+    ]);
+    const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue({
+        swap: swapFn,
+      }),
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_swap_calls",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain(
+      "Invalid swap_call_0 returned by SDK: entrypoint must be a valid Cairo identifier."
+    );
   });
 
   it("keeps swap execution write-gated by default", async () => {

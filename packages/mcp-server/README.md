@@ -21,7 +21,7 @@ npm run build
 # Read-only mode (balance checks, fee estimates, and pool position if staking is configured)
 STARKNET_PRIVATE_KEY=0x... node dist/index.js --network mainnet
 
-# Enable transfers and staking writes
+# Enable transfers, swaps, and staking writes
 STARKNET_PRIVATE_KEY=0x... STARKNET_STAKING_CONTRACT=0x... node dist/index.js --network mainnet --enable-write
 ```
 
@@ -30,7 +30,7 @@ STARKNET_PRIVATE_KEY=0x... STARKNET_STAKING_CONTRACT=0x... node dist/index.js --
 This server handles real funds. The following protections are built in:
 
 1. **All state-changing tools are disabled by default.** Read-only tools are available without write flags. Write tools (`starkzap_transfer`, `starkzap_swap`, staking, `starkzap_deploy_account`) require `--enable-write`. The unrestricted `starkzap_execute` tool requires its own `--enable-execute` flag.
-2. **Amount caps are enforced for both single ops and transfer batches.** All amount-bearing operations (transfers and staking) are bounded by `--max-amount` (default: 1000 tokens). Transfer batches are also bounded by `--max-batch-amount` (default: same as `--max-amount`). For state-dependent staking exits/claims, caps use multi-check preflight validation and remain best-effort with a residual chain-state race window between final check and inclusion (typically 1-3 Starknet blocks). `starkzap_exit_pool` calls `wallet.exitPool(pool)`, which in StarkZap SDK delegates to pool `exit_delegation_pool_action(walletAddress)` (no amount argument). Preflight validates the latest observed `unpooling + rewards` snapshot, but final settlement is computed on-chain at inclusion time. Worst-case excess vs preflight is therefore not hard-capped by MCP and depends on pool/contract state transitions between final read and inclusion. Keep `--max-amount` conservative and reconcile tx hashes before retrying.
+2. **Amount caps are enforced for both single ops and transfer batches.** All amount-bearing operations (transfers, swaps, and staking) are bounded by `--max-amount` (default: 1000 tokens). Transfer batches are also bounded by `--max-batch-amount` (default: same as `--max-amount`). For state-dependent staking exits/claims, caps use multi-check preflight validation and remain best-effort with a residual chain-state race window between final check and inclusion (typically 1-3 Starknet blocks). `starkzap_exit_pool` calls `wallet.exitPool(pool)`, which in StarkZap SDK delegates to pool `exit_delegation_pool_action(walletAddress)` (no amount argument). Preflight validates the latest observed `unpooling + rewards` snapshot, but final settlement is computed on-chain at inclusion time. Worst-case excess vs preflight is therefore not hard-capped by MCP and depends on pool/contract state transitions between final read and inclusion. Keep `--max-amount` conservative and reconcile tx hashes before retrying.
 3. **Batch size limits.** Maximum 20 transfers per batch, 10 calls per execute batch.
 4. **Address validation.** All addresses are validated against Starknet felt252 format before use.
 5. **Runtime argument validation.** Every tool's arguments are validated with zod schemas before execution. Malformed inputs are rejected with clear error messages.
@@ -74,7 +74,7 @@ This server handles real funds. The following protections are built in:
 | `--rate-limit-rpm`       | `0` (disabled)         | Global MCP tool-call rate limit per minute                                                                                                                                                                    |
 | `--read-rate-limit-rpm`  | `0` (disabled)         | Optional read-only bucket (`starkzap_get_account`, `starkzap_get_balance`, `starkzap_get_balances`, `starkzap_get_quote`, `starkzap_build_swap_calls`, `starkzap_get_pool_position`, `starkzap_estimate_fee`) |
 | `--write-rate-limit-rpm` | `0` (disabled)         | Optional state-changing bucket (transfer/swap/staking/deploy/execute)                                                                                                                                         |
-| `--enable-write`         | off                    | Enable state-changing tools (transfer, stake, deploy)                                                                                                                                                         |
+| `--enable-write`         | off                    | Enable state-changing tools (transfer, swap, stake, deploy)                                                                                                                                                   |
 | `--enable-execute`       | off                    | Enable only the unrestricted `starkzap_execute` tool                                                                                                                                                          |
 
 ## MCP Client Configuration
