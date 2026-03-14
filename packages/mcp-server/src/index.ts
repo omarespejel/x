@@ -1586,9 +1586,15 @@ async function handleTool(
       }));
       const txBuilder = wallet.tx();
       txBuilder.add(...requestedCalls);
-      const builtCalls = await withTimeout("Build calls query", () =>
+      const builtCallsResponse = await withTimeout("Build calls query", () =>
         txBuilder.calls()
       );
+      if (!Array.isArray(builtCallsResponse)) {
+        throw new Error(
+          "Invalid build calls response from SDK: expected array."
+        );
+      }
+      const builtCalls = builtCallsResponse;
       if (builtCalls.length !== requestedCalls.length) {
         throw new Error(
           `Invalid build calls response from SDK: expected ${requestedCalls.length} calls, received ${builtCalls.length}.`

@@ -877,12 +877,32 @@ function getArrayBounds(
   };
 }
 
+function getObjectAdditionalProperties(type: z.ZodTypeAny): boolean | null {
+  const unwrapped = unwrapZodType(type);
+  if (!(unwrapped instanceof z.ZodObject)) {
+    return null;
+  }
+  return unwrapped._def.unknownKeys === "strict" ? false : true;
+}
+
+function getArrayItemObjectAdditionalProperties(
+  type: z.ZodTypeAny
+): boolean | null {
+  const unwrapped = unwrapZodType(type);
+  if (!(unwrapped instanceof z.ZodArray)) {
+    return null;
+  }
+  return getObjectAdditionalProperties(unwrapped.element);
+}
+
 export function schemaParityMismatches(tools: readonly Tool[]): string[] {
   const mismatches: string[] = [];
   const schemaEntries = Object.entries(schemas) as Array<
     [keyof typeof schemas, z.AnyZodObject]
   >;
   const toolByName = new Map(tools.map((tool) => [tool.name, tool]));
+  const toAdditionalPropertiesBoolean = (value: unknown): boolean =>
+    value !== undefined ? value !== false : true;
 
   for (const [name, schema] of schemaEntries) {
     const tool = toolByName.get(name);
@@ -896,6 +916,7 @@ export function schemaParityMismatches(tools: readonly Tool[]): string[] {
           type?: string;
           properties?: Record<string, unknown>;
           required?: string[];
+          additionalProperties?: unknown;
         }
       | undefined;
 
@@ -920,6 +941,20 @@ export function schemaParityMismatches(tools: readonly Tool[]): string[] {
       );
     }
 
+    const expectedRootAdditionalProperties =
+      getObjectAdditionalProperties(schema);
+    const rootAdditionalProperties = toAdditionalPropertiesBoolean(
+      inputSchema.additionalProperties
+    );
+    if (
+      expectedRootAdditionalProperties !== null &&
+      rootAdditionalProperties !== expectedRootAdditionalProperties
+    ) {
+      mismatches.push(
+        `Tool "${name}" root strictness mismatch: zod additionalProperties=${expectedRootAdditionalProperties}, inputSchema additionalProperties=${rootAdditionalProperties}.`
+      );
+    }
+
     for (const [fieldName, fieldSchema] of Object.entries(schema.shape)) {
       const bounds = getArrayBounds(fieldSchema as z.ZodTypeAny);
       if (!bounds) {
@@ -938,6 +973,24 @@ export function schemaParityMismatches(tools: readonly Tool[]): string[] {
         mismatches.push(
           `Tool "${name}" array bounds mismatch for "${fieldName}": zod=[min:${bounds.min},max:${bounds.max}], inputSchema=[min:${inputMin},max:${inputMax}]`
         );
+      }
+
+      if (name === "starkzap_build_calls" && fieldName === "calls") {
+        const inputItems = (inputField as { items?: unknown } | undefined)
+          ?.items as { additionalProperties?: unknown } | undefined;
+        const expectedItemAdditionalProperties =
+          getArrayItemObjectAdditionalProperties(fieldSchema as z.ZodTypeAny);
+        const itemAdditionalProperties = toAdditionalPropertiesBoolean(
+          inputItems?.additionalProperties
+        );
+        if (
+          expectedItemAdditionalProperties !== null &&
+          itemAdditionalProperties !== expectedItemAdditionalProperties
+        ) {
+          mismatches.push(
+            `Tool "${name}" calls.items strictness mismatch: zod additionalProperties=${expectedItemAdditionalProperties}, inputSchema additionalProperties=${itemAdditionalProperties}.`
+          );
+        }
       }
     }
   }
