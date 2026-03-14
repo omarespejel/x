@@ -500,6 +500,66 @@ describe("index integration hardening", () => {
     expect(payload.calls?.[0]?.calldata).toEqual(["0x1", "0x2", "3"]);
   });
 
+  it("rejects build_swap_calls when calldata contains unsafe numeric values", async () => {
+    const callsFn = vi.fn().mockResolvedValue([
+      {
+        contractAddress: "0x1",
+        entrypoint: "swap_exact_tokens",
+        calldata: [Number.MAX_SAFE_INTEGER + 1],
+      },
+    ]);
+    const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue({
+        swap: swapFn,
+      }),
+    } as unknown as Wallet);
+
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_swap_calls",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain("Operation failed. Reference:");
+  });
+
+  it("rejects build_swap_calls when calldata contains invalid strings", async () => {
+    const callsFn = vi.fn().mockResolvedValue([
+      {
+        contractAddress: "0x1",
+        entrypoint: "swap_exact_tokens",
+        calldata: ["0xnothex"],
+      },
+    ]);
+    const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue({
+        swap: swapFn,
+      }),
+    } as unknown as Wallet);
+
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_swap_calls",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain("Operation failed. Reference:");
+  });
+
   it("rejects build_swap_calls when tokenIn/tokenOut resolve to the same token", async () => {
     const callsFn = vi.fn();
     const swapFn = vi.fn().mockReturnValue({ calls: callsFn });

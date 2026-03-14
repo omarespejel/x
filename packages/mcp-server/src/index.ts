@@ -655,9 +655,19 @@ function normalizeCallCalldataForResponse(
   calldata: unknown,
   label: string
 ): string[] {
+  const MAX_CALLDATA_ITEMS = 2048;
+  const MAX_CALLDATA_ITEM_CHARS = 256;
+  const CALLDATA_DECIMAL_REGEX = /^\d+$/;
+  const CALLDATA_HEX_REGEX = /^0x[0-9a-fA-F]{1,64}$/;
+
   if (!Array.isArray(calldata)) {
     throw new Error(
       `Invalid ${label} returned by SDK: calldata must be an array.`
+    );
+  }
+  if (calldata.length > MAX_CALLDATA_ITEMS) {
+    throw new Error(
+      `Invalid ${label} returned by SDK: calldata exceeds ${MAX_CALLDATA_ITEMS} items.`
     );
   }
   return calldata.map((item, index) => {
@@ -670,21 +680,29 @@ function normalizeCallCalldataForResponse(
       return `0x${item.toString(16)}`;
     }
     if (typeof item === "number") {
-      if (!Number.isInteger(item) || item < 0) {
+      if (!Number.isSafeInteger(item) || item < 0) {
         throw new Error(
-          `Invalid ${label} returned by SDK: calldata[${index}] must be a non-negative integer.`
+          `Invalid ${label} returned by SDK: calldata[${index}] must be a non-negative safe integer.`
         );
       }
       return item.toString(10);
     }
     if (typeof item === "string") {
       const trimmed = item.trim();
-      if (!trimmed) {
+      if (!trimmed || trimmed.length > MAX_CALLDATA_ITEM_CHARS) {
         throw new Error(
-          `Invalid ${label} returned by SDK: calldata[${index}] must be non-empty.`
+          `Invalid ${label} returned by SDK: calldata[${index}] must be a felt-like hex or decimal string.`
         );
       }
-      return trimmed;
+      if (CALLDATA_DECIMAL_REGEX.test(trimmed)) {
+        return trimmed;
+      }
+      if (CALLDATA_HEX_REGEX.test(trimmed)) {
+        return trimmed;
+      }
+      throw new Error(
+        `Invalid ${label} returned by SDK: calldata[${index}] must be a felt-like hex or decimal string.`
+      );
     }
     throw new Error(
       `Invalid ${label} returned by SDK: calldata[${index}] has unsupported type.`
