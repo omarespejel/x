@@ -195,6 +195,14 @@ describe("schema hardening", () => {
     expect(parsed.success).toBe(false);
   });
 
+  it("bounds token identifiers in get-balances schema", () => {
+    const tooLong = "A".repeat(129);
+    const parsed = schemas.starkzap_get_balances.safeParse({
+      tokens: [tooLong],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it("bounds calldata payload size", () => {
     const oversized = "a".repeat(257);
     const parsed = schemas.starkzap_execute.safeParse({
