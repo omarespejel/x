@@ -466,26 +466,65 @@ async function assertWalletAccountClassHash(
   wallet: Wallet,
   context: string
 ): Promise<void> {
-  const provider = wallet.getProvider();
-  let deployedClassHash: string;
+  const deploymentStatus = await getWalletDeploymentStatus(
+    wallet,
+    "Wallet account class-hash verification"
+  );
+  if (!deploymentStatus.deployed) {
+    throw new Error(
+      `${context} succeeded but wallet account is still not deployed on-chain.`
+    );
+  }
+  const expectedClassHash = fromAddress(wallet.getClassHash());
+  if (deploymentStatus.deployedClassHash !== expectedClassHash) {
+    throw new Error(
+      `${context} detected account class hash mismatch at ${wallet.address}. expected=${expectedClassHash} actual=${deploymentStatus.deployedClassHash}`
+    );
+  }
+}
+
+type WalletDeploymentStatus =
+  | { deployed: false }
+  | { deployed: true; deployedClassHash: string };
+
+async function getWalletDeploymentStatus(
+  wallet: Wallet,
+  timeoutLabel: string
+): Promise<WalletDeploymentStatus> {
   try {
-    deployedClassHash = fromAddress(
-      await withTimeout("Wallet account class-hash verification", () =>
-        provider.getClassHashAt(wallet.address)
+    const deployedClassHash = fromAddress(
+      await withTimeout(timeoutLabel, () =>
+        wallet.getProvider().getClassHashAt(wallet.address)
       )
     );
+    return {
+      deployed: true,
+      deployedClassHash,
+    };
   } catch (error) {
     if (isClassHashNotFoundError(error)) {
-      throw new Error(
-        `${context} succeeded but wallet account is still not deployed on-chain.`
-      );
+      return { deployed: false };
     }
     throw error;
   }
+}
+
+async function assertWalletAccountClassHashIfDeployed(
+  wallet: Wallet,
+  context: string
+): Promise<void> {
+  const deploymentStatus = await getWalletDeploymentStatus(
+    wallet,
+    `${context} deployment check`
+  );
+  if (!deploymentStatus.deployed) {
+    return;
+  }
+
   const expectedClassHash = fromAddress(wallet.getClassHash());
-  if (deployedClassHash !== expectedClassHash) {
+  if (deploymentStatus.deployedClassHash !== expectedClassHash) {
     throw new Error(
-      `${context} detected account class hash mismatch at ${wallet.address}. expected=${expectedClassHash} actual=${deployedClassHash}`
+      `${context} detected account class hash mismatch at ${wallet.address}. expected=${expectedClassHash} actual=${deploymentStatus.deployedClassHash}`
     );
   }
 }
@@ -1442,28 +1481,19 @@ async function handleTool(
 
   switch (name) {
     case "starkzap_get_account": {
-      const provider = wallet.getProvider();
       const expectedClassHash = fromAddress(wallet.getClassHash());
-      let deployed = false;
-      let deployedClassHash: string | undefined;
-      try {
-        deployedClassHash = fromAddress(
-          await withTimeout("Account deployment check", () =>
-            provider.getClassHashAt(wallet.address)
-          )
-        );
-        deployed = true;
-      } catch (error) {
-        if (!isClassHashNotFoundError(error)) {
-          throw error;
-        }
-      }
+      const deploymentStatus = await getWalletDeploymentStatus(
+        wallet,
+        "Account deployment check"
+      );
 
       return ok({
         address: wallet.address,
-        deployed,
+        deployed: deploymentStatus.deployed,
         expectedClassHash,
-        deployedClassHash: deployedClassHash ?? null,
+        deployedClassHash: deploymentStatus.deployed
+          ? deploymentStatus.deployedClassHash
+          : null,
       });
     }
 
@@ -1521,7 +1551,7 @@ async function handleTool(
         ? ({ type: "paymaster" } as const)
         : undefined;
       if (feeMode === "sponsored") {
-        await assertWalletAccountClassHash(
+        await assertWalletAccountClassHashIfDeployed(
           wallet,
           "Sponsored transfer preflight"
         );
@@ -1565,7 +1595,7 @@ async function handleTool(
         ? ({ type: "paymaster" } as const)
         : undefined;
       if (feeMode === "sponsored") {
-        await assertWalletAccountClassHash(
+        await assertWalletAccountClassHashIfDeployed(
           wallet,
           "Sponsored execute preflight"
         );
@@ -1628,25 +1658,15 @@ async function handleTool(
 
     case "starkzap_deploy_account": {
       const parsed = args as z.infer<typeof schemas.starkzap_deploy_account>;
-      const provider = wallet.getProvider();
-      let isDeployedOnChain = false;
-      let deployedClassHash: string | undefined;
-      try {
-        const classHash = await withTimeout("Account deployment check", () =>
-          provider.getClassHashAt(wallet.address)
-        );
-        deployedClassHash = fromAddress(classHash);
-        isDeployedOnChain = true;
-      } catch (error) {
-        if (!isClassHashNotFoundError(error)) {
-          throw error;
-        }
-      }
-      if (isDeployedOnChain) {
+      const deploymentStatus = await getWalletDeploymentStatus(
+        wallet,
+        "Account deployment check"
+      );
+      if (deploymentStatus.deployed) {
         const expectedClassHash = fromAddress(wallet.getClassHash());
-        if (deployedClassHash !== expectedClassHash) {
+        if (deploymentStatus.deployedClassHash !== expectedClassHash) {
           throw new Error(
-            `Address ${wallet.address} is deployed with unexpected class hash ${deployedClassHash}. Expected ${expectedClassHash}. Use the private key that controls this deployed account, or use a different private key and deploy it first with starkzap_deploy_account.`
+            `Address ${wallet.address} is deployed with unexpected class hash ${deploymentStatus.deployedClassHash}. Expected ${expectedClassHash}. Use the private key that controls this deployed account, or use a different private key and deploy it first with starkzap_deploy_account.`
           );
         }
         return ok({

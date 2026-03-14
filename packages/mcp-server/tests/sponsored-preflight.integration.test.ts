@@ -42,6 +42,45 @@ beforeEach(() => {
 });
 
 describe("sponsored write preflight hardening", () => {
+  it("allows sponsored transfer preflight to continue when the account is undeployed", async () => {
+    const transfer = vi.fn().mockResolvedValue({
+      hash: "0x123",
+      wait: vi.fn().mockResolvedValue(undefined),
+      explorerUrl: "https://example.com/tx/0x123",
+    });
+    const wallet = {
+      address:
+        "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      getClassHash: () =>
+        "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      getProvider: () => ({
+        getClassHashAt: vi
+          .fn()
+          .mockRejectedValue(new Error("Contract not found")),
+      }),
+      transfer,
+    } as unknown as Wallet;
+
+    testing.setWalletSingleton(wallet);
+
+    const result = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_transfer",
+        arguments: {
+          token: "STRK",
+          transfers: [{ to: "0x1", amount: "0.1" }],
+          sponsored: true,
+        },
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text ?? "").toContain(
+      "Sponsored transfer post-check succeeded but wallet account is still not deployed on-chain."
+    );
+    expect(transfer).toHaveBeenCalledOnce();
+  });
+
   it("blocks sponsored transfer before submission when account class hash mismatches", async () => {
     const transfer = vi.fn();
     const wallet = {

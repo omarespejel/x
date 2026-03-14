@@ -53,17 +53,17 @@ This server handles real funds. The following protections are built in:
 
 ### Environment Variables
 
-| Variable                             | Required | Description                                                                                     |
-| ------------------------------------ | -------- | ----------------------------------------------------------------------------------------------- |
-| `STARKNET_PRIVATE_KEY`               | Yes      | Stark curve private key (`0x` + exactly 64 hex chars, cryptographically valid)                  |
-| `STARKNET_ACCOUNT_ADDRESS`           | No       | Override derived account address (useful for funded/deployed accounts from existing setups)     |
-| `STARKNET_RPC_URL`                   | No       | Custom RPC endpoint (overrides network preset; HTTPS required except localhost HTTP)            |
-| `STARKNET_PAYMASTER_URL`             | No       | Custom paymaster endpoint for sponsored tx (HTTPS required except localhost HTTP)               |
-| `AVNU_PAYMASTER_API_KEY`             | No       | API key sent as `x-paymaster-api-key` for sponsored tx on AVNU paymaster                        |
-| `STARKNET_RPC_TIMEOUT_MS`            | No       | RPC timeout in milliseconds (default: `30000`)                                                  |
-| `STARKNET_POOL_CACHE_TTL_MS`         | No       | Pool class-hash cache TTL in ms (default: `30000`, set `0` to disable cache)                    |
-| `STARKNET_STAKING_CONTRACT`          | No       | Staking contract address (enables staking tools)                                                |
-| `STARKNET_STAKING_POOL_CLASS_HASHES` | No       | Comma-separated allowlist of pool contract class hashes (0x...) for strict pool-type validation |
+| Variable                             | Required | Description                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STARKNET_PRIVATE_KEY`               | Yes      | Stark curve private key (`0x` + exactly 64 hex chars, cryptographically valid)                                                                                                                                                                                                                                    |
+| `STARKNET_ACCOUNT_ADDRESS`           | No       | Override derived account address for an existing funded/deployed account. Only safe when that account contract is controlled by `STARKNET_PRIVATE_KEY`; pointing at a different deployed address makes read-only calls reference that other account and causes writes to fail with signature or class-hash errors |
+| `STARKNET_RPC_URL`                   | No       | Custom RPC endpoint (overrides network preset; HTTPS required except localhost HTTP)                                                                                                                                                                                                                              |
+| `STARKNET_PAYMASTER_URL`             | No       | Custom paymaster endpoint for sponsored tx (HTTPS required except localhost HTTP)                                                                                                                                                                                                                                 |
+| `AVNU_PAYMASTER_API_KEY`             | No       | API key sent as `x-paymaster-api-key` for sponsored tx on AVNU paymaster                                                                                                                                                                                                                                          |
+| `STARKNET_RPC_TIMEOUT_MS`            | No       | RPC timeout in milliseconds (default: `30000`)                                                                                                                                                                                                                                                                    |
+| `STARKNET_POOL_CACHE_TTL_MS`         | No       | Pool class-hash cache TTL in ms (default: `30000`, set `0` to disable cache)                                                                                                                                                                                                                                      |
+| `STARKNET_STAKING_CONTRACT`          | No       | Staking contract address (enables staking tools)                                                                                                                                                                                                                                                                  |
+| `STARKNET_STAKING_POOL_CLASS_HASHES` | No       | Comma-separated allowlist of pool contract class hashes (0x...) for strict pool-type validation                                                                                                                                                                                                                   |
 
 ### CLI Arguments
 
