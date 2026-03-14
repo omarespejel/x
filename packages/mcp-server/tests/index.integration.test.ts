@@ -588,6 +588,39 @@ describe("index integration hardening", () => {
     );
   });
 
+  it("rejects build_swap_calls when decimal calldata exceeds felt range", async () => {
+    const tooLargeDecimal = "9".repeat(90);
+    const callsFn = vi.fn().mockResolvedValue([
+      {
+        contractAddress: "0x1",
+        entrypoint: "swap_exact_tokens",
+        calldata: [tooLargeDecimal],
+      },
+    ]);
+    const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue({
+        swap: swapFn,
+      }),
+    } as unknown as Wallet);
+
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_swap_calls",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain(
+      "Invalid swap_call_0 returned by SDK: calldata_0 exceeds felt range."
+    );
+  });
+
   it("rejects build_swap_calls when tokenIn/tokenOut resolve to the same token", async () => {
     const callsFn = vi.fn();
     const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
@@ -663,6 +696,49 @@ describe("index integration hardening", () => {
     expect(response.isError).toBe(true);
     expect(response.content[0]?.text).toContain(
       "Invalid swap_call_0 returned by SDK: entrypoint must be a valid Cairo identifier."
+    );
+  });
+
+  it("rejects build_swap_calls when aggregated calldata item count is too large", async () => {
+    const largeCalldata = Array.from({ length: 1500 }, () => "1");
+    const callsFn = vi.fn().mockResolvedValue([
+      {
+        contractAddress: "0x1",
+        entrypoint: "swap_exact_tokens",
+        calldata: largeCalldata,
+      },
+      {
+        contractAddress: "0x2",
+        entrypoint: "swap_exact_tokens",
+        calldata: largeCalldata,
+      },
+      {
+        contractAddress: "0x3",
+        entrypoint: "swap_exact_tokens",
+        calldata: largeCalldata,
+      },
+    ]);
+    const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue({
+        swap: swapFn,
+      }),
+    } as unknown as Wallet);
+
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_swap_calls",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain(
+      "Invalid swap calls returned by SDK: calldata item count exceeds 4096."
     );
   });
 
