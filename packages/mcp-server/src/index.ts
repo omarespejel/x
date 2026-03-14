@@ -1589,51 +1589,6 @@ async function handleTool(
       });
     }
 
-    case "starkzap_swap": {
-      const parsed = args as z.infer<typeof schemas.starkzap_swap>;
-      const tokenIn = resolveToken(parsed.tokenIn);
-      const tokenOut = resolveToken(parsed.tokenOut);
-      assertDistinctSwapTokens(tokenIn, tokenOut, "Swap execution");
-      const amountIn = parseAmountWithContext(parsed.amountIn, tokenIn, "swap");
-      assertAmountWithinCap(amountIn, tokenIn, maxAmount);
-      const feeMode: "sponsored" | undefined = parsed.sponsored
-        ? "sponsored"
-        : undefined;
-      if (feeMode === "sponsored") {
-        await assertWalletAccountClassHash(wallet, "Sponsored swap preflight");
-      }
-      const tx = await withTimeout("Swap transaction submission", () =>
-        wallet.swap(
-          {
-            tokenIn,
-            tokenOut,
-            amountIn,
-            ...(parsed.slippageBps !== undefined && {
-              slippageBps: BigInt(parsed.slippageBps),
-            }),
-            ...(parsed.provider !== undefined && { provider: parsed.provider }),
-          },
-          {
-            ...(feeMode && { feeMode }),
-          }
-        )
-      );
-      const txResult = await waitForTrackedTransaction(tx);
-      if (feeMode === "sponsored") {
-        await assertWalletAccountClassHash(wallet, "Sponsored swap post-check");
-      }
-      return ok({
-        hash: txResult.hash,
-        explorerUrl: txResult.explorerUrl,
-        tokenIn: sanitizeTokenSymbol(tokenIn.symbol),
-        tokenInAddress: tokenIn.address,
-        tokenOut: sanitizeTokenSymbol(tokenOut.symbol),
-        tokenOutAddress: tokenOut.address,
-        amountIn: amountIn.toUnit(),
-        amountInRaw: amountIn.toBase().toString(),
-      });
-    }
-
     case "starkzap_build_calls": {
       const parsed = args as z.infer<typeof schemas.starkzap_build_calls>;
       const contractAddresses = validateAddressBatch(
