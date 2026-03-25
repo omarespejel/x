@@ -330,6 +330,16 @@ describe("tool gating and parity", () => {
     }
   });
 
+  it("marks build_swap_calls as non-idempotent despite being read-only", () => {
+    const tools = buildTools("100", "150");
+    const buildSwapCalls = tools.find(
+      (tool) => tool.name === "starkzap_build_swap_calls"
+    );
+    expect(buildSwapCalls).toBeDefined();
+    expect(buildSwapCalls?.annotations?.readOnlyHint).toBe(true);
+    expect(buildSwapCalls?.annotations?.idempotentHint).toBe(false);
+  });
+
   it("keeps swap tool inputSchema constraints aligned with runtime validation", () => {
     const tools = buildTools("100", "150");
     const quoteTool = tools.find((tool) => tool.name === "starkzap_get_quote");
