@@ -324,19 +324,23 @@ export const schemas = {
       .max(20, "Maximum 20 transfers per batch"),
     sponsored: z.boolean().optional(),
   }),
-  starkzap_execute: z.object({
-    calls: z
-      .array(
-        z.object({
-          contractAddress: addressSchema,
-          entrypoint: entrypointSchema,
-          calldata: calldataSchema,
-        })
-      )
-      .min(1)
-      .max(10, "Maximum 10 calls per batch"),
-    sponsored: z.boolean().optional(),
-  }),
+  starkzap_execute: z
+    .object({
+      calls: z
+        .array(
+          z
+            .object({
+              contractAddress: addressSchema,
+              entrypoint: entrypointSchema,
+              calldata: calldataSchema,
+            })
+            .strict()
+        )
+        .min(1)
+        .max(10, "Maximum 10 calls per batch"),
+      sponsored: z.boolean().optional(),
+    })
+    .strict(),
   starkzap_build_calls: z
     .object({
       calls: z
@@ -495,6 +499,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
       },
       inputSchema: {
         type: "object" as const,
+        additionalProperties: false,
         properties: {
           calls: {
             type: "array",
@@ -502,6 +507,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
             maxItems: 10,
             items: {
               type: "object",
+              additionalProperties: false,
               properties: {
                 contractAddress: {
                   type: "string",
@@ -975,11 +981,11 @@ export function schemaParityMismatches(tools: readonly Tool[]): string[] {
         );
       }
 
-      if (name === "starkzap_build_calls" && fieldName === "calls") {
+      const expectedItemAdditionalProperties =
+        getArrayItemObjectAdditionalProperties(fieldSchema as z.ZodTypeAny);
+      if (expectedItemAdditionalProperties !== null) {
         const inputItems = (inputField as { items?: unknown } | undefined)
           ?.items as { additionalProperties?: unknown } | undefined;
-        const expectedItemAdditionalProperties =
-          getArrayItemObjectAdditionalProperties(fieldSchema as z.ZodTypeAny);
         const itemAdditionalProperties = toAdditionalPropertiesBoolean(
           inputItems?.additionalProperties
         );
@@ -988,7 +994,7 @@ export function schemaParityMismatches(tools: readonly Tool[]): string[] {
           itemAdditionalProperties !== expectedItemAdditionalProperties
         ) {
           mismatches.push(
-            `Tool "${name}" calls.items strictness mismatch: zod additionalProperties=${expectedItemAdditionalProperties}, inputSchema additionalProperties=${itemAdditionalProperties}.`
+            `Tool "${name}" ${fieldName}.items strictness mismatch: zod additionalProperties=${expectedItemAdditionalProperties}, inputSchema additionalProperties=${itemAdditionalProperties}.`
           );
         }
       }
