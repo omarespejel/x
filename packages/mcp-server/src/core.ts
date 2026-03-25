@@ -446,7 +446,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: true,
       },
       inputSchema: {

@@ -595,6 +595,30 @@ function assertDistinctSwapTokens(
   }
 }
 
+async function mapWithConcurrencyLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error(`Invalid concurrency limit: ${limit}`);
+  }
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+      }
+    }
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 function assertOverallFeeIsBigInt(fee: unknown): asserts fee is {
   overall_fee: bigint;
 } {
@@ -1576,8 +1600,10 @@ async function handleTool(
       const resolvedTokens = parsed.tokens.map((tokenInput) =>
         resolveToken(tokenInput)
       );
-      const balances = await Promise.all(
-        resolvedTokens.map(async (token) => {
+      const balances = await mapWithConcurrencyLimit(
+        resolvedTokens,
+        8,
+        async (token) => {
           const balance = await withTimeout(
             `Token balance query (${token.symbol})`,
             () => wallet.balanceOf(token)
@@ -1596,7 +1622,7 @@ async function handleTool(
             raw: balance.toBase().toString(),
             decimals: balance.getDecimals(),
           };
-        })
+        }
       );
       return ok({
         balances,
