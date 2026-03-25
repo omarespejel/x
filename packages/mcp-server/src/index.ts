@@ -31,7 +31,9 @@ import {
   assertPoolTokenHintMatches,
   assertSchemaParity,
   buildTools,
+  CALLDATA_ITEM_REGEX,
   createTokenResolver,
+  ENTRYPOINT_IDENTIFIER_REGEX,
   enforcePerMinuteRateLimit,
   extractPoolToken,
   FELT_REGEX,
@@ -620,9 +622,6 @@ function parseAmountWithContext(
   }
 }
 
-const ENTRYPOINT_IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-const CALLDATA_ITEM_REGEX = /^(0x[0-9a-fA-F]{1,64}|[0-9]+)$/;
-
 function normalizeCalldataItemForResponse(
   value: unknown,
   path: string
@@ -646,6 +645,11 @@ function normalizeCalldataItemForResponse(
     if (normalized.length > 256) {
       throw new Error(`Invalid ${path}: value exceeds 256 characters.`);
     }
+    if (!CALLDATA_ITEM_REGEX.test(normalized)) {
+      throw new Error(
+        `Invalid ${path}: must be a felt-like hex (0x...) or decimal string.`
+      );
+    }
     return normalized;
   }
   if (typeof value === "number") {
@@ -657,6 +661,11 @@ function normalizeCalldataItemForResponse(
     const normalized = value.toString();
     if (normalized.length > 256) {
       throw new Error(`Invalid ${path}: value exceeds 256 characters.`);
+    }
+    if (!CALLDATA_ITEM_REGEX.test(normalized)) {
+      throw new Error(
+        `Invalid ${path}: must be a felt-like hex (0x...) or decimal string.`
+      );
     }
     return normalized;
   }

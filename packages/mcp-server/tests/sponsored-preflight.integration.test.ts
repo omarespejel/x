@@ -24,6 +24,12 @@ const originalTestingHooks = (globalThis as Record<string, unknown>)
   .__STARKZAP_MCP_TESTING__;
 
 beforeAll(async () => {
+  vi.resetModules();
+  delete (globalThis as Record<string, unknown>).__STARKZAP_MCP_TESTING__;
+  delete process.env.STARKNET_ACCOUNT_ADDRESS;
+  delete process.env.STARKNET_STAKING_CONTRACT;
+  delete process.env.STARKNET_PAYMASTER_URL;
+  delete process.env.AVNU_PAYMASTER_API_KEY;
   process.env.NODE_ENV = "test";
   process.env.STARKZAP_MCP_ENABLE_TEST_HOOKS = "1";
   process.env.STARKZAP_MCP_TEST_KEY_MARKER =

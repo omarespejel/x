@@ -283,21 +283,18 @@ export const amountSchema = z
     message: "Amount must be greater than zero",
   });
 
+export const ENTRYPOINT_IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+export const CALLDATA_ITEM_REGEX = /^(0x[0-9a-fA-F]{1,64}|[0-9]+)$/;
+
 const entrypointSchema = z
   .string()
   .max(64, "Entrypoint name too long (max 64 chars)")
-  .regex(
-    /^[a-zA-Z_][a-zA-Z0-9_]*$/,
-    "Entrypoint must match Cairo identifier format"
-  );
+  .regex(ENTRYPOINT_IDENTIFIER_REGEX, "Entrypoint must match Cairo identifier format");
 
 const calldataItemSchema = z
   .string()
   .max(256, "Calldata item too large (max 256 chars)")
-  .regex(
-    /^(0x[0-9a-fA-F]{1,64}|[0-9]+)$/,
-    "Calldata must be a felt-like hex (0x...) or decimal string"
-  );
+  .regex(CALLDATA_ITEM_REGEX, "Calldata must be a felt-like hex (0x...) or decimal string");
 
 const calldataSchema = z
   .array(calldataItemSchema)
@@ -511,6 +508,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
               properties: {
                 contractAddress: {
                   type: "string",
+                  pattern: "^0x[0-9a-fA-F]{1,64}$",
                   description: "Contract address",
                 },
                 entrypoint: {
@@ -522,7 +520,11 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
                 calldata: {
                   type: "array",
                   maxItems: 2048,
-                  items: { type: "string" },
+                  items: {
+                    type: "string",
+                    maxLength: 256,
+                    pattern: "^(0x[0-9a-fA-F]{1,64}|[0-9]+)$",
+                  },
                   description: "Calldata as array of strings",
                 },
               },
@@ -561,6 +563,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
               properties: {
                 contractAddress: {
                   type: "string",
+                  pattern: "^0x[0-9a-fA-F]{1,64}$",
                   description: "Contract address",
                 },
                 entrypoint: {
@@ -572,7 +575,11 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
                 calldata: {
                   type: "array",
                   maxItems: 2048,
-                  items: { type: "string" },
+                  items: {
+                    type: "string",
+                    maxLength: 256,
+                    pattern: "^(0x[0-9a-fA-F]{1,64}|[0-9]+)$",
+                  },
                   description: "Calldata as array of strings",
                 },
               },
