@@ -537,6 +537,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+const FELT252_UPPER_BOUND = BigInt(
+  "0x800000000000011000000000000000000000000000000000000000000000001"
+);
+
 type AmountMethod =
   | "toUnit"
   | "toFormatted"
@@ -692,9 +696,15 @@ function normalizeCallCalldataForResponse(
 ): string[] {
   const MAX_CALLDATA_ITEMS = 2048;
   const MAX_CALLDATA_ITEM_CHARS = 256;
-  const MAX_FELT_HEX_CHARS = 64;
   const CALLDATA_DECIMAL_REGEX = /^\d+$/;
   const CALLDATA_HEX_REGEX = /^0x[0-9a-fA-F]{1,64}$/;
+  const assertFelt252Value = (value: bigint, index: number): void => {
+    if (value >= FELT252_UPPER_BOUND) {
+      throw new Error(
+        `Invalid ${label} returned by SDK: calldata_${index} exceeds felt range.`
+      );
+    }
+  };
 
   if (!Array.isArray(calldata)) {
     throw new Error(
@@ -713,13 +723,8 @@ function normalizeCallCalldataForResponse(
           `Invalid ${label} returned by SDK: calldata_${index} must be non-negative.`
         );
       }
-      const hexValue = item.toString(16);
-      if (hexValue.length > MAX_FELT_HEX_CHARS) {
-        throw new Error(
-          `Invalid ${label} returned by SDK: calldata_${index} exceeds felt range.`
-        );
-      }
-      return `0x${hexValue}`;
+      assertFelt252Value(item, index);
+      return `0x${item.toString(16)}`;
     }
     if (typeof item === "number") {
       if (!Number.isSafeInteger(item) || item < 0) {
@@ -727,6 +732,7 @@ function normalizeCallCalldataForResponse(
           `Invalid ${label} returned by SDK: calldata_${index} must be a non-negative safe integer.`
         );
       }
+      assertFelt252Value(BigInt(item), index);
       return item.toString(10);
     }
     if (typeof item === "string") {
@@ -738,14 +744,11 @@ function normalizeCallCalldataForResponse(
       }
       if (CALLDATA_DECIMAL_REGEX.test(trimmed)) {
         const decimalValue = BigInt(trimmed);
-        if (decimalValue.toString(16).length > MAX_FELT_HEX_CHARS) {
-          throw new Error(
-            `Invalid ${label} returned by SDK: calldata_${index} exceeds felt range.`
-          );
-        }
+        assertFelt252Value(decimalValue, index);
         return trimmed;
       }
       if (CALLDATA_HEX_REGEX.test(trimmed)) {
+        assertFelt252Value(BigInt(trimmed), index);
         return trimmed;
       }
       throw new Error(
@@ -1492,6 +1495,8 @@ function buildToolErrorText(error: unknown): string {
     "Sponsored ",
     "Transaction ",
     "Address ",
+    "Swap ",
+    "Build swap calls:",
     "starkzap_",
   ];
   const hasSafePrefix = safeMessagePrefixes.some((prefix) =>
@@ -1782,6 +1787,19 @@ async function handleTool(
       assertDistinctSwapTokens(tokenIn, tokenOut, "Swap execution");
       const amountIn = parseAmountWithContext(parsed.amountIn, tokenIn, "swap");
       assertAmountWithinCap(amountIn, tokenIn, maxAmount);
+      const quote = await withTimeout("Swap quote precheck", () =>
+        wallet.getQuote({
+          tokenIn,
+          tokenOut,
+          amountIn,
+          ...(parsed.slippageBps !== undefined && {
+            slippageBps: BigInt(parsed.slippageBps),
+          }),
+          ...(parsed.provider !== undefined && { provider: parsed.provider }),
+        })
+      );
+      assertSwapQuoteShape(quote);
+      const quotedOutAmount = Amount.fromRaw(quote.amountOutBase, tokenOut);
       const feeMode: "sponsored" | undefined = parsed.sponsored
         ? "sponsored"
         : undefined;
@@ -1817,6 +1835,19 @@ async function handleTool(
         tokenOutAddress: tokenOut.address,
         amountIn: amountIn.toUnit(),
         amountInRaw: amountIn.toBase().toString(),
+        amountOut: quotedOutAmount.toUnit(),
+        amountOutRaw: quote.amountOutBase.toString(),
+        amountOutSource: "pretrade_quote",
+        ...(quote.routeCallCount !== undefined && {
+          routeCallCount: quote.routeCallCount,
+        }),
+        ...(quote.priceImpactBps !== undefined && {
+          priceImpactBps:
+            quote.priceImpactBps === null
+              ? null
+              : quote.priceImpactBps.toString(),
+        }),
+        ...(quote.provider !== undefined && { provider: quote.provider }),
       });
     }
 

@@ -285,7 +285,8 @@ export const amountSchema = z
 
 const tokenIdentifierSchema = z
   .string()
-  .min(1)
+  .trim()
+  .min(1, "Token identifier cannot be empty")
   .max(128, "Token identifier too long (max 128 chars)");
 
 const tokenBatchSchema = z
@@ -498,6 +499,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
               type: "string",
               minLength: 1,
               maxLength: 128,
+              pattern: ".*\\S.*",
               description:
                 "Token symbol (ETH, STRK, USDC, etc.) or contract address",
             },
@@ -622,12 +624,16 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
         properties: {
           tokenIn: {
             type: "string",
+            minLength: 1,
             maxLength: 128,
+            pattern: ".*\\S.*",
             description: "Input token symbol or contract address",
           },
           tokenOut: {
             type: "string",
+            minLength: 1,
             maxLength: 128,
+            pattern: ".*\\S.*",
             description: "Output token symbol or contract address",
           },
           amountIn: {
@@ -670,12 +676,16 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
         properties: {
           tokenIn: {
             type: "string",
+            minLength: 1,
             maxLength: 128,
+            pattern: ".*\\S.*",
             description: "Input token symbol or contract address",
           },
           tokenOut: {
             type: "string",
+            minLength: 1,
             maxLength: 128,
+            pattern: ".*\\S.*",
             description: "Output token symbol or contract address",
           },
           amountIn: {
@@ -722,12 +732,16 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
         properties: {
           tokenIn: {
             type: "string",
+            minLength: 1,
             maxLength: 128,
+            pattern: ".*\\S.*",
             description: "Input token symbol or contract address",
           },
           tokenOut: {
             type: "string",
+            minLength: 1,
             maxLength: 128,
+            pattern: ".*\\S.*",
             description: "Output token symbol or contract address",
           },
           amountIn: {
