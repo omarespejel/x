@@ -150,6 +150,13 @@ describe("schema hardening", () => {
     expect(parsed.success).toBe(false);
   });
 
+  it("rejects duplicate token identifiers in get-balances schema", () => {
+    const parsed = schemas.starkzap_get_balances.safeParse({
+      tokens: ["STRK", "strk"],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it("validates swap slippage bps bounds", () => {
     const parsed = schemas.starkzap_get_quote.safeParse({
       tokenIn: "STRK",
