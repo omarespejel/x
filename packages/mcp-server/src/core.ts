@@ -292,7 +292,13 @@ const tokenIdentifierSchema = z
 const tokenBatchSchema = z
   .array(tokenIdentifierSchema)
   .min(1)
-  .max(32, "Maximum 32 tokens per balance batch");
+  .max(32, "Maximum 32 tokens per balance batch")
+  .refine(
+    (tokens) =>
+      new Set(tokens.map((token) => token.toLowerCase())).size ===
+      tokens.length,
+    { message: "Duplicate tokens are not allowed" }
+  );
 
 const slippageBpsSchema = z.number().int().min(0).max(9999);
 const providerSchema = z
@@ -495,6 +501,7 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
             type: "array",
             minItems: 1,
             maxItems: 32,
+            uniqueItems: true,
             items: {
               type: "string",
               minLength: 1,
