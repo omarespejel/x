@@ -22,7 +22,6 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-<<<<<<< HEAD
 import { Amount, fromAddress, StarkZap, StarkSigner } from "starkzap";
 import type { Address, Token, Wallet } from "starkzap";
 import {
