@@ -144,7 +144,7 @@ describe("index integration hardening", () => {
     expect(connectWallet).toHaveBeenCalledTimes(1);
     expect(connectWallet).toHaveBeenCalledWith(
       expect.objectContaining({
-        accountAddress: "0x2",
+        accountAddress: fromAddress("0x2"),
       })
     );
 
@@ -153,7 +153,7 @@ describe("index integration hardening", () => {
     expect(connectWallet).toHaveBeenCalledTimes(2);
     expect(connectWallet).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        accountAddress: "0x2",
+        accountAddress: fromAddress("0x2"),
       })
     );
   });
