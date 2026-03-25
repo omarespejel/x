@@ -14,16 +14,7 @@ type TestingExports = {
 
 let testing: TestingExports;
 const originalArgv = [...process.argv];
-const originalEnv = {
-  NODE_ENV: process.env.NODE_ENV,
-  STARKZAP_MCP_ENABLE_TEST_HOOKS: process.env.STARKZAP_MCP_ENABLE_TEST_HOOKS,
-  STARKZAP_MCP_TEST_KEY_MARKER: process.env.STARKZAP_MCP_TEST_KEY_MARKER,
-  STARKNET_PRIVATE_KEY: process.env.STARKNET_PRIVATE_KEY,
-  STARKNET_ACCOUNT_ADDRESS: process.env.STARKNET_ACCOUNT_ADDRESS,
-  STARKNET_STAKING_CONTRACT: process.env.STARKNET_STAKING_CONTRACT,
-  STARKNET_PAYMASTER_URL: process.env.STARKNET_PAYMASTER_URL,
-  AVNU_PAYMASTER_API_KEY: process.env.AVNU_PAYMASTER_API_KEY,
-};
+const originalEnv = { ...process.env };
 const originalTestingHooks = (globalThis as Record<string, unknown>)
   .__STARKZAP_MCP_TESTING__;
 
@@ -62,12 +53,13 @@ beforeEach(() => {
 
 afterAll(() => {
   process.argv = originalArgv;
-  for (const [key, value] of Object.entries(originalEnv)) {
-    if (value === undefined) {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in originalEnv)) {
       delete process.env[key];
-    } else {
-      process.env[key] = value;
     }
+  }
+  for (const [key, value] of Object.entries(originalEnv)) {
+    process.env[key] = value;
   }
   (globalThis as Record<string, unknown>).__STARKZAP_MCP_TESTING__ =
     originalTestingHooks;
