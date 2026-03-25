@@ -429,13 +429,16 @@ async function getWallet(): Promise<Wallet> {
     );
   }
   if (!walletInitPromise) {
+    const accountAddressOverride = env.STARKNET_ACCOUNT_ADDRESS
+      ? validateAddressOrThrow(env.STARKNET_ACCOUNT_ADDRESS, "account")
+      : undefined;
     walletInitPromise = withTimeout("Wallet initialization", () =>
       getSdk().connectWallet({
         account: {
           signer: new StarkSigner(env.STARKNET_PRIVATE_KEY),
         },
-        ...(env.STARKNET_ACCOUNT_ADDRESS && {
-          accountAddress: env.STARKNET_ACCOUNT_ADDRESS,
+        ...(accountAddressOverride && {
+          accountAddress: accountAddressOverride,
         }),
       })
     )

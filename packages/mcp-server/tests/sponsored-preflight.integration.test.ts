@@ -44,6 +44,7 @@ beforeAll(async () => {
     "--network",
     "sepolia",
     "--enable-write",
+    "--enable-execute",
   ];
 
   await import("../src/index.js");
