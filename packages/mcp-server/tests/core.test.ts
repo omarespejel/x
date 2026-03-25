@@ -330,11 +330,18 @@ describe("tool gating and parity", () => {
 
     const inputSchema = quoteTool?.inputSchema as
       | {
-          properties?: Record<string, { maxLength?: number; pattern?: string }>;
+          properties?: Record<
+            string,
+            { minLength?: number; maxLength?: number; pattern?: string }
+          >;
         }
       | undefined;
+    expect(inputSchema?.properties?.tokenIn?.minLength).toBe(1);
     expect(inputSchema?.properties?.tokenIn?.maxLength).toBe(128);
+    expect(inputSchema?.properties?.tokenIn?.pattern).toBe(".*\\S.*");
+    expect(inputSchema?.properties?.tokenOut?.minLength).toBe(1);
     expect(inputSchema?.properties?.tokenOut?.maxLength).toBe(128);
+    expect(inputSchema?.properties?.tokenOut?.pattern).toBe(".*\\S.*");
     expect(inputSchema?.properties?.provider?.maxLength).toBe(64);
     expect(inputSchema?.properties?.provider?.pattern).toBe(
       "^[A-Za-z0-9._:-]+$"

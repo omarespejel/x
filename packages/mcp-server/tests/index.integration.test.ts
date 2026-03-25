@@ -489,7 +489,9 @@ describe("index integration hardening", () => {
       },
     });
     expect(response.isError).toBe(true);
-    expect(response.content[0]?.text).toContain("Operation failed. Reference:");
+    expect(response.content[0]?.text).toContain(
+      "Swap quote: tokenIn and tokenOut resolve to the same token"
+    );
     expect(getQuote).not.toHaveBeenCalled();
   });
 
@@ -632,6 +634,40 @@ describe("index integration hardening", () => {
     );
   });
 
+  it("rejects build_swap_calls when hex calldata exceeds felt252 upper bound", async () => {
+    const tooLargeHex =
+      "0x0800000000000011000000000000000000000000000000000000000000000001";
+    const callsFn = vi.fn().mockResolvedValue([
+      {
+        contractAddress: "0x1",
+        entrypoint: "swap_exact_tokens",
+        calldata: [tooLargeHex],
+      },
+    ]);
+    const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue({
+        swap: swapFn,
+      }),
+    } as unknown as Wallet);
+
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_swap_calls",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain(
+      "Invalid swap_call_0 returned by SDK: calldata_0 exceeds felt range."
+    );
+  });
+
   it("rejects build_swap_calls when tokenIn/tokenOut resolve to the same token", async () => {
     const callsFn = vi.fn();
     const swapFn = vi.fn().mockReturnValue({ calls: callsFn });
@@ -651,7 +687,9 @@ describe("index integration hardening", () => {
       },
     });
     expect(response.isError).toBe(true);
-    expect(response.content[0]?.text).toContain("Operation failed. Reference:");
+    expect(response.content[0]?.text).toContain(
+      "Build swap calls: tokenIn and tokenOut resolve to the same token"
+    );
     expect(swapFn).not.toHaveBeenCalled();
     expect(callsFn).not.toHaveBeenCalled();
   });
