@@ -1,5 +1,13 @@
 import type { Wallet } from "starkzap";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 type TestingExports = {
   handleCallToolRequest(request: {

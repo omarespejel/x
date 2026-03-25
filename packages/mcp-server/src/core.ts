@@ -289,12 +289,18 @@ export const CALLDATA_ITEM_REGEX = /^(0x[0-9a-fA-F]{1,64}|[0-9]+)$/;
 const entrypointSchema = z
   .string()
   .max(64, "Entrypoint name too long (max 64 chars)")
-  .regex(ENTRYPOINT_IDENTIFIER_REGEX, "Entrypoint must match Cairo identifier format");
+  .regex(
+    ENTRYPOINT_IDENTIFIER_REGEX,
+    "Entrypoint must match Cairo identifier format"
+  );
 
 const calldataItemSchema = z
   .string()
   .max(256, "Calldata item too large (max 256 chars)")
-  .regex(CALLDATA_ITEM_REGEX, "Calldata must be a felt-like hex (0x...) or decimal string");
+  .regex(
+    CALLDATA_ITEM_REGEX,
+    "Calldata must be a felt-like hex (0x...) or decimal string"
+  );
 
 const calldataSchema = z
   .array(calldataItemSchema)
