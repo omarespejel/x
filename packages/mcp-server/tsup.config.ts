@@ -4,8 +4,9 @@ export default defineConfig({
   entry: ["src/index.ts"],
   format: ["esm"],
   dts: true,
-  // Bundle StarkZap SDK to keep runtime resolution deterministic for npx usage.
-  noExternal: ["starkzap"],
+  // Keep runtime dependencies external. Bundling StarkZap pulls websocket
+  // internals into the ESM artifact and breaks Node startup on real MCP runs.
+  platform: "node",
   target: "es2020",
   clean: true,
 });
