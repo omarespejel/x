@@ -243,6 +243,184 @@ function parseErgonomicCommand(
           }),
         },
       };
+    case "lending-markets":
+      return {
+        toolName: "starkzap_lending_markets",
+        input: {
+          ...(takeOptionValue(values, "provider") && {
+            provider: takeOptionValue(values, "provider"),
+          }),
+        },
+      };
+    case "lending-position":
+      return {
+        toolName: "starkzap_lending_position",
+        input: {
+          collateralToken: takeOptionValue(values, "collateral-token"),
+          debtToken: takeOptionValue(values, "debt-token"),
+          ...(takeOptionValue(values, "provider") && {
+            provider: takeOptionValue(values, "provider"),
+          }),
+          ...(takeOptionValue(values, "pool-address") && {
+            poolAddress: takeOptionValue(values, "pool-address"),
+          }),
+          ...(takeOptionValue(values, "user") && {
+            user: takeOptionValue(values, "user"),
+          }),
+        },
+      };
+    case "lending-health":
+      return {
+        toolName: "starkzap_lending_health",
+        input: {
+          collateralToken: takeOptionValue(values, "collateral-token"),
+          debtToken: takeOptionValue(values, "debt-token"),
+          ...(takeOptionValue(values, "provider") && {
+            provider: takeOptionValue(values, "provider"),
+          }),
+          ...(takeOptionValue(values, "pool-address") && {
+            poolAddress: takeOptionValue(values, "pool-address"),
+          }),
+          ...(takeOptionValue(values, "user") && {
+            user: takeOptionValue(values, "user"),
+          }),
+        },
+      };
+    case "lending-quote-health": {
+      const action = takeOptionValue(values, "action");
+      if (!action) {
+        throw new Error("Missing --action.");
+      }
+      const provider = takeOptionValue(values, "provider");
+      const poolAddress = takeOptionValue(values, "pool-address");
+      const user = takeOptionValue(values, "user");
+      const healthProvider =
+        takeOptionValue(values, "health-provider") ?? provider;
+      const healthPoolAddress =
+        takeOptionValue(values, "health-pool-address") ?? poolAddress;
+      const healthUser = takeOptionValue(values, "health-user") ?? user;
+      const actionInput = (() => {
+        switch (action) {
+          case "deposit":
+            return {
+              action: "deposit",
+              request: {
+                token: takeOptionValue(values, "token"),
+                amount: takeOptionValue(values, "amount"),
+                ...(provider && { provider }),
+                ...(poolAddress && { poolAddress }),
+                ...(takeOptionValue(values, "receiver") && {
+                  receiver: takeOptionValue(values, "receiver"),
+                }),
+              },
+            };
+          case "withdraw":
+            return {
+              action: "withdraw",
+              request: {
+                token: takeOptionValue(values, "token"),
+                amount: takeOptionValue(values, "amount"),
+                ...(provider && { provider }),
+                ...(poolAddress && { poolAddress }),
+                ...(takeOptionValue(values, "receiver") && {
+                  receiver: takeOptionValue(values, "receiver"),
+                }),
+                ...(takeOptionValue(values, "owner") && {
+                  owner: takeOptionValue(values, "owner"),
+                }),
+              },
+            };
+          case "borrow":
+            return {
+              action: "borrow",
+              request: {
+                collateralToken: takeOptionValue(values, "collateral-token"),
+                debtToken: takeOptionValue(values, "debt-token"),
+                amount: takeOptionValue(values, "amount"),
+                ...(provider && { provider }),
+                ...(poolAddress && { poolAddress }),
+                ...(user && { user }),
+                ...(takeOptionValue(values, "collateral-amount") && {
+                  collateralAmount: takeOptionValue(
+                    values,
+                    "collateral-amount"
+                  ),
+                }),
+                ...(takeOptionValue(values, "collateral-denomination") && {
+                  collateralDenomination: takeOptionValue(
+                    values,
+                    "collateral-denomination"
+                  ),
+                }),
+                ...(takeOptionValue(values, "debt-denomination") && {
+                  debtDenomination: takeOptionValue(
+                    values,
+                    "debt-denomination"
+                  ),
+                }),
+                ...(booleans.has("use-earn-position") && {
+                  useEarnPosition: true,
+                }),
+              },
+            };
+          case "repay":
+            return {
+              action: "repay",
+              request: {
+                collateralToken: takeOptionValue(values, "collateral-token"),
+                debtToken: takeOptionValue(values, "debt-token"),
+                amount: takeOptionValue(values, "amount"),
+                ...(provider && { provider }),
+                ...(poolAddress && { poolAddress }),
+                ...(user && { user }),
+                ...(takeOptionValue(values, "collateral-amount") && {
+                  collateralAmount: takeOptionValue(
+                    values,
+                    "collateral-amount"
+                  ),
+                }),
+                ...(takeOptionValue(values, "collateral-denomination") && {
+                  collateralDenomination: takeOptionValue(
+                    values,
+                    "collateral-denomination"
+                  ),
+                }),
+                ...(takeOptionValue(values, "debt-denomination") && {
+                  debtDenomination: takeOptionValue(
+                    values,
+                    "debt-denomination"
+                  ),
+                }),
+                ...(booleans.has("withdraw-collateral") && {
+                  withdrawCollateral: true,
+                }),
+              },
+            };
+          default:
+            throw new Error(
+              `Invalid --action value "${action}". Must be one of: deposit, withdraw, borrow, repay.`
+            );
+        }
+      })();
+      return {
+        toolName: "starkzap_lending_quote_health",
+        input: {
+          action: actionInput,
+          health: {
+            collateralToken:
+              takeOptionValue(values, "health-collateral-token") ??
+              takeOptionValue(values, "collateral-token"),
+            debtToken:
+              takeOptionValue(values, "health-debt-token") ??
+              takeOptionValue(values, "debt-token"),
+            ...(healthProvider && { provider: healthProvider }),
+            ...(healthPoolAddress && { poolAddress: healthPoolAddress }),
+            ...(healthUser && { user: healthUser }),
+          },
+          ...(booleans.has("sponsored") && { sponsored: true }),
+        },
+      };
+    }
     case "build-swap-calls":
       return {
         toolName: "starkzap_build_swap_calls",
@@ -282,6 +460,133 @@ function parseErgonomicCommand(
               takeOptionValue(values, "slippage-bps"),
               "slippage-bps"
             ),
+          }),
+          ...(booleans.has("sponsored") && { sponsored: true }),
+        },
+      };
+    case "lending-deposit":
+      return {
+        toolName: "starkzap_lending_deposit",
+        input: {
+          token: takeOptionValue(values, "token"),
+          amount: takeOptionValue(values, "amount"),
+          ...(takeOptionValue(values, "provider") && {
+            provider: takeOptionValue(values, "provider"),
+          }),
+          ...(takeOptionValue(values, "pool-address") && {
+            poolAddress: takeOptionValue(values, "pool-address"),
+          }),
+          ...(takeOptionValue(values, "receiver") && {
+            receiver: takeOptionValue(values, "receiver"),
+          }),
+          ...(booleans.has("sponsored") && { sponsored: true }),
+        },
+      };
+    case "lending-withdraw":
+      return {
+        toolName: "starkzap_lending_withdraw",
+        input: {
+          token: takeOptionValue(values, "token"),
+          amount: takeOptionValue(values, "amount"),
+          ...(takeOptionValue(values, "provider") && {
+            provider: takeOptionValue(values, "provider"),
+          }),
+          ...(takeOptionValue(values, "pool-address") && {
+            poolAddress: takeOptionValue(values, "pool-address"),
+          }),
+          ...(takeOptionValue(values, "receiver") && {
+            receiver: takeOptionValue(values, "receiver"),
+          }),
+          ...(takeOptionValue(values, "owner") && {
+            owner: takeOptionValue(values, "owner"),
+          }),
+          ...(booleans.has("sponsored") && { sponsored: true }),
+        },
+      };
+    case "lending-withdraw-max":
+      return {
+        toolName: "starkzap_lending_withdraw_max",
+        input: {
+          token: takeOptionValue(values, "token"),
+          ...(takeOptionValue(values, "provider") && {
+            provider: takeOptionValue(values, "provider"),
+          }),
+          ...(takeOptionValue(values, "pool-address") && {
+            poolAddress: takeOptionValue(values, "pool-address"),
+          }),
+          ...(takeOptionValue(values, "receiver") && {
+            receiver: takeOptionValue(values, "receiver"),
+          }),
+          ...(takeOptionValue(values, "owner") && {
+            owner: takeOptionValue(values, "owner"),
+          }),
+          ...(booleans.has("sponsored") && { sponsored: true }),
+        },
+      };
+    case "lending-borrow":
+      return {
+        toolName: "starkzap_lending_borrow",
+        input: {
+          collateralToken: takeOptionValue(values, "collateral-token"),
+          debtToken: takeOptionValue(values, "debt-token"),
+          amount: takeOptionValue(values, "amount"),
+          ...(takeOptionValue(values, "provider") && {
+            provider: takeOptionValue(values, "provider"),
+          }),
+          ...(takeOptionValue(values, "pool-address") && {
+            poolAddress: takeOptionValue(values, "pool-address"),
+          }),
+          ...(takeOptionValue(values, "user") && {
+            user: takeOptionValue(values, "user"),
+          }),
+          ...(takeOptionValue(values, "collateral-amount") && {
+            collateralAmount: takeOptionValue(values, "collateral-amount"),
+          }),
+          ...(takeOptionValue(values, "collateral-denomination") && {
+            collateralDenomination: takeOptionValue(
+              values,
+              "collateral-denomination"
+            ),
+          }),
+          ...(takeOptionValue(values, "debt-denomination") && {
+            debtDenomination: takeOptionValue(values, "debt-denomination"),
+          }),
+          ...(booleans.has("use-earn-position") && {
+            useEarnPosition: true,
+          }),
+          ...(booleans.has("sponsored") && { sponsored: true }),
+        },
+      };
+    case "lending-repay":
+      return {
+        toolName: "starkzap_lending_repay",
+        input: {
+          collateralToken: takeOptionValue(values, "collateral-token"),
+          debtToken: takeOptionValue(values, "debt-token"),
+          amount: takeOptionValue(values, "amount"),
+          ...(takeOptionValue(values, "provider") && {
+            provider: takeOptionValue(values, "provider"),
+          }),
+          ...(takeOptionValue(values, "pool-address") && {
+            poolAddress: takeOptionValue(values, "pool-address"),
+          }),
+          ...(takeOptionValue(values, "user") && {
+            user: takeOptionValue(values, "user"),
+          }),
+          ...(takeOptionValue(values, "collateral-amount") && {
+            collateralAmount: takeOptionValue(values, "collateral-amount"),
+          }),
+          ...(takeOptionValue(values, "collateral-denomination") && {
+            collateralDenomination: takeOptionValue(
+              values,
+              "collateral-denomination"
+            ),
+          }),
+          ...(takeOptionValue(values, "debt-denomination") && {
+            debtDenomination: takeOptionValue(values, "debt-denomination"),
+          }),
+          ...(booleans.has("withdraw-collateral") && {
+            withdrawCollateral: true,
           }),
           ...(booleans.has("sponsored") && { sponsored: true }),
         },
@@ -350,9 +655,13 @@ export function buildHelpText(): string {
     "  starkzap-cli run <tool-name> --input '{...}' [global flags]",
     "  starkzap-cli get-balances --tokens STRK,ETH [global flags]",
     "  starkzap-cli get-quote --token-in STRK --token-out ETH --amount-in 1 [global flags]",
+    "  starkzap-cli lending-markets --provider vesu [global flags]",
+    "  starkzap-cli lending-position --collateral-token STRK --debt-token USDC [global flags]",
+    "  starkzap-cli lending-quote-health --action borrow --collateral-token STRK --debt-token USDC --amount 0.1 [global flags]",
     "  starkzap-cli build-swap-calls --token-in STRK --token-out ETH --amount-in 1 [global flags]",
     "  starkzap-cli build-calls --calls '[{...}]' [global flags]",
     "  starkzap-cli swap --token-in STRK --token-out ETH --amount-in 1 --enable-write [global flags]",
+    "  starkzap-cli lending-borrow --collateral-token STRK --debt-token USDC --amount 0.1 --enable-write [global flags]",
     "",
     "P0 commands:",
     commandLines,

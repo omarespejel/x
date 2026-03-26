@@ -864,6 +864,7 @@ export function createP0Runtime(cliArgs: string[]): P0RuntimeHandle {
       "Transaction ",
       "Address ",
       "Swap ",
+      "Lending ",
       "Build swap calls:",
       "Build calls ",
       "starkzap_",

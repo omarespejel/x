@@ -495,6 +495,137 @@ describe("index integration hardening", () => {
     expect(getQuote).not.toHaveBeenCalled();
   });
 
+  it("returns lending markets from the shared action layer", async () => {
+    testing.setWalletSingleton({
+      lending: vi.fn().mockReturnValue({
+        getMarkets: vi.fn().mockResolvedValue([
+          {
+            protocol: "vesu",
+            poolAddress: "0x123",
+            poolName: "Vesu STRK",
+            asset: TEST_TOKEN,
+            vTokenAddress: "0x456",
+            vTokenSymbol: "vSTRK",
+            canBeBorrowed: true,
+          },
+        ]),
+      }),
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_lending_markets",
+        arguments: { provider: "vesu" },
+      },
+    });
+
+    expect(response.isError).not.toBe(true);
+    const payload = JSON.parse(response.content[0]?.text ?? "{}") as {
+      markets?: Array<{
+        protocol?: string;
+        asset?: { symbol?: string };
+        canBeBorrowed?: boolean;
+      }>;
+    };
+    expect(payload.markets).toHaveLength(1);
+    expect(payload.markets?.[0]?.protocol).toBe("vesu");
+    expect(payload.markets?.[0]?.asset?.symbol).toBe("STRK");
+    expect(payload.markets?.[0]?.canBeBorrowed).toBe(true);
+  });
+
+  it("returns lending position and quote-health payloads", async () => {
+    testing.setWalletSingleton({
+      lending: vi.fn().mockReturnValue({
+        getPosition: vi.fn().mockResolvedValue({
+          collateralShares: 10n,
+          nominalDebt: 0n,
+          collateralAmount: 20n,
+          debtAmount: 0n,
+          collateralValue: 30n,
+          debtValue: 0n,
+          isCollateralized: true,
+        }),
+        quoteHealth: vi.fn().mockResolvedValue({
+          current: {
+            isCollateralized: true,
+            collateralValue: 100n,
+            debtValue: 20n,
+          },
+          prepared: {
+            providerId: "vesu",
+            action: "borrow",
+            calls: [
+              {
+                contractAddress: "0x1",
+                entrypoint: "modify_position",
+                calldata: [1n, "0x2"],
+              },
+            ],
+          },
+          simulation: {
+            ok: false,
+            reason: "would liquidate",
+          },
+          projected: {
+            isCollateralized: false,
+            collateralValue: 100n,
+            debtValue: 120n,
+          },
+        }),
+      }),
+    } as unknown as Wallet);
+
+    const positionResponse = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_lending_position",
+        arguments: {
+          collateralToken: "STRK",
+          debtToken: "USDC",
+        },
+      },
+    });
+
+    expect(positionResponse.isError).not.toBe(true);
+    const positionPayload = JSON.parse(
+      positionResponse.content[0]?.text ?? "{}"
+    ) as {
+      position?: { collateralShares?: string; isCollateralized?: boolean };
+    };
+    expect(positionPayload.position?.collateralShares).toBe("10");
+    expect(positionPayload.position?.isCollateralized).toBe(true);
+
+    const quoteResponse = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_lending_quote_health",
+        arguments: {
+          action: {
+            action: "borrow",
+            request: {
+              collateralToken: "STRK",
+              debtToken: "USDC",
+              amount: "0.1",
+            },
+          },
+          health: {
+            collateralToken: "STRK",
+            debtToken: "USDC",
+          },
+        },
+      },
+    });
+
+    expect(quoteResponse.isError).not.toBe(true);
+    const quotePayload = JSON.parse(quoteResponse.content[0]?.text ?? "{}") as {
+      simulation?: { ok?: boolean; reason?: string };
+      prepared?: { action?: string; callCount?: number };
+      projected?: { debtValue?: string };
+    };
+    expect(quotePayload.simulation?.ok).toBe(false);
+    expect(quotePayload.simulation?.reason).toBe("would liquidate");
+    expect(quotePayload.prepared?.action).toBe("borrow");
+    expect(quotePayload.prepared?.callCount).toBe(1);
+    expect(quotePayload.projected?.debtValue).toBe("120");
+  });
+
   it("builds and normalizes raw calls via tx builder without execution", async () => {
     const txBuilder = {
       add: vi.fn().mockImplementation(() => txBuilder),
@@ -900,6 +1031,21 @@ describe("index integration hardening", () => {
           tokenIn: "STRK",
           tokenOut: "USDC",
           amountIn: "1",
+        },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain("disabled by default");
+  });
+
+  it("keeps lending writes gated by default", async () => {
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_lending_borrow",
+        arguments: {
+          collateralToken: "STRK",
+          debtToken: "USDC",
+          amount: "0.1",
         },
       },
     });

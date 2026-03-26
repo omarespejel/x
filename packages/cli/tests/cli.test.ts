@@ -90,6 +90,83 @@ describe("starkzap-cli parser", () => {
       },
     });
   });
+
+  it("parses lending borrow ergonomic invocation", () => {
+    const parsed = parseCliInvocation([
+      "lending-borrow",
+      "--collateral-token",
+      "STRK",
+      "--debt-token",
+      "USDC",
+      "--amount",
+      "0.1",
+      "--collateral-amount",
+      "20",
+      "--provider",
+      "vesu",
+      "--use-earn-position",
+      "--sponsored",
+    ]);
+
+    expect(parsed).toEqual({
+      kind: "run",
+      globalArgs: [],
+      toolName: "starkzap_lending_borrow",
+      input: {
+        collateralToken: "STRK",
+        debtToken: "USDC",
+        amount: "0.1",
+        collateralAmount: "20",
+        provider: "vesu",
+        useEarnPosition: true,
+        sponsored: true,
+      },
+    });
+  });
+
+  it("parses lending quote-health ergonomic invocation", () => {
+    const parsed = parseCliInvocation([
+      "lending-quote-health",
+      "--action",
+      "repay",
+      "--collateral-token",
+      "STRK",
+      "--debt-token",
+      "USDC",
+      "--amount",
+      "0",
+      "--collateral-amount",
+      "5",
+      "--withdraw-collateral",
+      "--health-user",
+      "0x123",
+      "--sponsored",
+    ]);
+
+    expect(parsed).toEqual({
+      kind: "run",
+      globalArgs: [],
+      toolName: "starkzap_lending_quote_health",
+      input: {
+        action: {
+          action: "repay",
+          request: {
+            collateralToken: "STRK",
+            debtToken: "USDC",
+            amount: "0",
+            collateralAmount: "5",
+            withdrawCollateral: true,
+          },
+        },
+        health: {
+          collateralToken: "STRK",
+          debtToken: "USDC",
+          user: "0x123",
+        },
+        sponsored: true,
+      },
+    });
+  });
 });
 
 describe("starkzap-cli manifest parity", () => {
