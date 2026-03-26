@@ -23,7 +23,7 @@ npm run build
 # Read-only mode (balance checks, fee estimates, and pool position if staking is configured)
 STARKNET_PRIVATE_KEY=0x... node dist/index.js --network mainnet
 
-# Enable transfers, swaps, and staking writes
+# Enable transfers, swaps, lending, and staking writes
 STARKNET_PRIVATE_KEY=0x... STARKNET_STAKING_CONTRACT=0x... node dist/index.js --network mainnet --enable-write
 ```
 
@@ -31,8 +31,8 @@ STARKNET_PRIVATE_KEY=0x... STARKNET_STAKING_CONTRACT=0x... node dist/index.js --
 
 This server handles real funds. The following protections are built in:
 
-1. **All state-changing tools are disabled by default.** Read-only tools are available without write flags. Write tools (`starkzap_transfer`, `starkzap_swap`, staking, `starkzap_deploy_account`) require `--enable-write`. The unrestricted `starkzap_execute` tool requires its own `--enable-execute` flag.
-2. **Amount caps are enforced for both single ops and transfer batches.** All amount-bearing operations (transfers, swaps, and staking) are bounded by `--max-amount` (default: 1000 tokens). Transfer batches are also bounded by `--max-batch-amount` (default: same as `--max-amount`). For state-dependent staking exits/claims, caps use multi-check preflight validation and remain best-effort with a residual chain-state race window between final check and inclusion (typically 1-3 Starknet blocks). `starkzap_exit_pool` calls `wallet.exitPool(pool)`, which in StarkZap SDK delegates to pool `exit_delegation_pool_action(walletAddress)` (no amount argument). Preflight validates the latest observed `unpooling + rewards` snapshot, but final settlement is computed on-chain at inclusion time. Worst-case excess vs preflight is therefore not hard-capped by MCP and depends on pool/contract state transitions between final read and inclusion. Keep `--max-amount` conservative and reconcile tx hashes before retrying.
+1. **All state-changing tools are disabled by default.** Read-only tools are available without write flags. Write tools (`starkzap_transfer`, `starkzap_swap`, lending writes, staking, `starkzap_deploy_account`) require `--enable-write`. The unrestricted `starkzap_execute` tool requires its own `--enable-execute` flag.
+2. **Amount caps are enforced for both single ops and transfer batches.** All amount-bearing operations (transfers, swaps, lending, and staking) are bounded by `--max-amount` (default: 1000 tokens). Transfer batches are also bounded by `--max-batch-amount` (default: same as `--max-amount`). For state-dependent staking exits/claims, caps use multi-check preflight validation and remain best-effort with a residual chain-state race window between final check and inclusion (typically 1-3 Starknet blocks). `starkzap_exit_pool` calls `wallet.exitPool(pool)`, which in StarkZap SDK delegates to pool `exit_delegation_pool_action(walletAddress)` (no amount argument). Preflight validates the latest observed `unpooling + rewards` snapshot, but final settlement is computed on-chain at inclusion time. Worst-case excess vs preflight is therefore not hard-capped by MCP and depends on pool/contract state transitions between final read and inclusion. Keep `--max-amount` conservative and reconcile tx hashes before retrying.
 3. **Batch size limits.** Maximum 20 transfers per batch, 10 calls per execute batch.
 4. **Address validation.** All addresses are validated against Starknet felt252 format before use.
 5. **Runtime argument validation.** Every tool's arguments are validated with zod schemas before execution. Malformed inputs are rejected with clear error messages.
@@ -69,16 +69,16 @@ This server handles real funds. The following protections are built in:
 
 ### CLI Arguments
 
-| Argument                 | Default                | Description                                                                                                                                                                                                                           |
-| ------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--network`              | `mainnet`              | Network preset: `mainnet` or `sepolia` (validated at startup)                                                                                                                                                                         |
-| `--max-amount`           | `1000`                 | Max tokens per individual amount-bearing operation                                                                                                                                                                                    |
-| `--max-batch-amount`     | `same as --max-amount` | Max total tokens across one `starkzap_transfer` batch call                                                                                                                                                                            |
-| `--rate-limit-rpm`       | `0` (disabled)         | Global MCP tool-call rate limit per minute                                                                                                                                                                                            |
-| `--read-rate-limit-rpm`  | `0` (disabled)         | Optional read-only bucket (`starkzap_get_account`, `starkzap_get_balance`, `starkzap_get_balances`, `starkzap_build_calls`, `starkzap_get_quote`, `starkzap_build_swap_calls`, `starkzap_get_pool_position`, `starkzap_estimate_fee`) |
-| `--write-rate-limit-rpm` | `0` (disabled)         | Optional state-changing bucket (transfer/swap/staking/deploy/execute)                                                                                                                                                                 |
-| `--enable-write`         | off                    | Enable state-changing tools (transfer, swap, stake, deploy)                                                                                                                                                                           |
-| `--enable-execute`       | off                    | Enable only the unrestricted `starkzap_execute` tool                                                                                                                                                                                  |
+| Argument                 | Default                | Description                                                                                                                                                                                                                                          |
+| ------------------------ | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--network`              | `mainnet`              | Network preset: `mainnet` or `sepolia` (validated at startup)                                                                                                                                                                                        |
+| `--max-amount`           | `1000`                 | Max tokens per individual amount-bearing operation                                                                                                                                                                                                   |
+| `--max-batch-amount`     | `same as --max-amount` | Max total tokens across one `starkzap_transfer` batch call                                                                                                                                                                                           |
+| `--rate-limit-rpm`       | `0` (disabled)         | Global MCP tool-call rate limit per minute                                                                                                                                                                                                           |
+| `--read-rate-limit-rpm`  | `0` (disabled)         | Optional read-only bucket (`starkzap_get_account`, `starkzap_get_balance`, `starkzap_get_balances`, `starkzap_build_calls`, `starkzap_get_quote`, lending reads, `starkzap_build_swap_calls`, `starkzap_get_pool_position`, `starkzap_estimate_fee`) |
+| `--write-rate-limit-rpm` | `0` (disabled)         | Optional state-changing bucket (transfer/swap/lending/staking/deploy/execute)                                                                                                                                                                        |
+| `--enable-write`         | off                    | Enable state-changing tools (transfer, swap, lending, stake, deploy)                                                                                                                                                                                 |
+| `--enable-execute`       | off                    | Enable only the unrestricted `starkzap_execute` tool                                                                                                                                                                                                 |
 
 ## MCP Client Configuration
 
@@ -151,6 +151,20 @@ const mcpServer = new McpServerStdio({
 | `starkzap_swap`             | Execute swap transaction via configured provider (default: AVNU) |
 | `starkzap_build_swap_calls` | Build unsigned swap calls (approval + route) without executing   |
 
+### Lending
+
+| Tool                            | Description                                                                         |
+| ------------------------------- | ----------------------------------------------------------------------------------- |
+| `starkzap_lending_markets`      | List lending markets for the configured provider                                    |
+| `starkzap_lending_position`     | Get the current lending position for a collateral/debt pair                         |
+| `starkzap_lending_health`       | Get the current lending health snapshot for a pair                                  |
+| `starkzap_lending_quote_health` | Simulate a lending action and return projected health                               |
+| `starkzap_lending_deposit`      | Deposit assets into a lending market                                                |
+| `starkzap_lending_withdraw`     | Withdraw a specific amount from a lending market                                    |
+| `starkzap_lending_withdraw_max` | Withdraw the maximum available balance                                              |
+| `starkzap_lending_borrow`       | Borrow against collateral (supports collateral-only adjustments with `amount: "0"`) |
+| `starkzap_lending_repay`        | Repay debt and optionally withdraw collateral                                       |
+
 ### Staking
 
 | Tool                         | Description                                                           |
@@ -194,6 +208,29 @@ Agent: "Send 10 USDC to 0x1111111111111111111111111111111111111111 and 5 USDC to
     ]
   }
 ← { hash: "0x...", explorerUrl: "https://voyager.online/tx/0x...", transfers: [...] }
+```
+
+### Quote lending health
+
+```text
+Agent: "If I borrow 0.1 USDC against STRK on Vesu, what happens to health?"
+→ calls starkzap_lending_quote_health {
+    action: {
+      action: "borrow",
+      request: {
+        collateralToken: "STRK",
+        debtToken: "USDC",
+        amount: "0.1",
+        provider: "vesu"
+      }
+    },
+    health: {
+      collateralToken: "STRK",
+      debtToken: "USDC",
+      provider: "vesu"
+    }
+  }
+← { current: {...}, prepared: {...}, simulation: { ok: true }, projected: {...} }
 ```
 
 ### Stake STRK
@@ -254,6 +291,10 @@ npm run typecheck
 
 # Tests (includes schema parity checks)
 npm run test
+
+# Adapter builds + parity/conformance coverage
+npm run build:adapters
+npm run test:adapters
 
 # Release precheck (verifies StarkZap version range is published)
 npm view starkzap@^1.0.0 version

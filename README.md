@@ -36,6 +36,7 @@ Building for React Native/Expo? Use [React Native Integration](/build/starkzap/r
 
 - `packages/mcp-server` provides `starkzap-mcp` for MCP-compatible agents.
 - `packages/cli` provides `starkzap-cli` for shell/CI flows and shares the same P0 execution handlers used by MCP parity work.
+- Current shared execution parity covers balances, swaps, and Vesu lending flows across MCP and CLI.
 
 ### Dependencies
 

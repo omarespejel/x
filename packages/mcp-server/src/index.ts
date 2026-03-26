@@ -1529,6 +1529,7 @@ function buildToolErrorText(error: unknown): string {
     "Transaction ",
     "Address ",
     "Swap ",
+    "Lending ",
     "Build swap calls:",
     "Build calls ",
     "starkzap_",

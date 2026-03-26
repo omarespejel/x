@@ -230,6 +230,39 @@ describe("schema hardening", () => {
     expect(quoteParsed.success).toBe(false);
   });
 
+  it("allows zero debt amount for lending borrow/repay schemas", () => {
+    const borrowParsed = schemas.starkzap_lending_borrow.safeParse({
+      collateralToken: "STRK",
+      debtToken: "USDC",
+      amount: "0",
+    });
+    expect(borrowParsed.success).toBe(true);
+
+    const repayParsed = schemas.starkzap_lending_repay.safeParse({
+      collateralToken: "STRK",
+      debtToken: "USDC",
+      amount: "0",
+    });
+    expect(repayParsed.success).toBe(true);
+  });
+
+  it("rejects same-token lending pair schemas", () => {
+    const parsed = schemas.starkzap_lending_position.safeParse({
+      collateralToken: "STRK",
+      debtToken: "strk",
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejects unknown fields in lending schemas", () => {
+    const parsed = schemas.starkzap_lending_deposit.safeParse({
+      token: "STRK",
+      amount: "1",
+      unexpected: true,
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it("bounds token identifiers in swap schemas", () => {
     const tooLong = "A".repeat(129);
     const parsed = schemas.starkzap_get_quote.safeParse({
@@ -326,8 +359,13 @@ describe("tool gating and parity", () => {
     expect(names.has("starkzap_build_calls")).toBe(true);
     expect(names.has("starkzap_get_balances")).toBe(true);
     expect(names.has("starkzap_get_quote")).toBe(true);
+    expect(names.has("starkzap_lending_markets")).toBe(true);
+    expect(names.has("starkzap_lending_position")).toBe(true);
+    expect(names.has("starkzap_lending_health")).toBe(true);
+    expect(names.has("starkzap_lending_quote_health")).toBe(true);
     expect(names.has("starkzap_build_swap_calls")).toBe(true);
     expect(names.has("starkzap_swap")).toBe(false);
+    expect(names.has("starkzap_lending_borrow")).toBe(false);
   });
 
   it("hides staking tools when staking config is absent", () => {

@@ -283,6 +283,14 @@ export const amountSchema = z
     message: "Amount must be greater than zero",
   });
 
+const nonNegativeAmountSchema = z
+  .string()
+  .max(32, "Amount string too long (max 32 chars)")
+  .regex(/^\d+(\.\d+)?$/, "Amount must be a non-negative number")
+  .refine((value) => Number(value) >= 0, {
+    message: "Amount must be zero or greater",
+  });
+
 const tokenIdentifierSchema = z
   .string()
   .trim()
@@ -309,6 +317,7 @@ const providerSchema = z
     /^[A-Za-z0-9._:-]+$/,
     "Provider id may only contain letters, numbers, dot, underscore, colon, and hyphen"
   );
+const lendingAmountDenominationSchema = z.enum(["assets", "native"]);
 
 const swapInputBaseSchema = z
   .object({
@@ -328,6 +337,183 @@ const swapInputSchema = swapInputBaseSchema.refine(
     path: ["tokenOut"],
   }
 );
+
+const lendingDepositRequestSchema = z
+  .object({
+    token: tokenIdentifierSchema,
+    amount: amountSchema,
+    provider: providerSchema.optional(),
+    poolAddress: addressSchema.optional(),
+    receiver: addressSchema.optional(),
+  })
+  .strict();
+
+const lendingWithdrawRequestSchema = z
+  .object({
+    token: tokenIdentifierSchema,
+    amount: amountSchema,
+    provider: providerSchema.optional(),
+    poolAddress: addressSchema.optional(),
+    receiver: addressSchema.optional(),
+    owner: addressSchema.optional(),
+  })
+  .strict();
+
+const lendingWithdrawMaxRequestSchema = z
+  .object({
+    token: tokenIdentifierSchema,
+    provider: providerSchema.optional(),
+    poolAddress: addressSchema.optional(),
+    receiver: addressSchema.optional(),
+    owner: addressSchema.optional(),
+  })
+  .strict();
+
+const lendingBorrowRequestSchema = z
+  .object({
+    collateralToken: tokenIdentifierSchema,
+    debtToken: tokenIdentifierSchema,
+    amount: nonNegativeAmountSchema,
+    provider: providerSchema.optional(),
+    poolAddress: addressSchema.optional(),
+    user: addressSchema.optional(),
+    collateralAmount: nonNegativeAmountSchema.optional(),
+    collateralDenomination: lendingAmountDenominationSchema.optional(),
+    debtDenomination: lendingAmountDenominationSchema.optional(),
+    useEarnPosition: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.collateralToken.trim().toLowerCase() !==
+      value.debtToken.trim().toLowerCase(),
+    {
+      message: "collateralToken and debtToken must be different",
+      path: ["debtToken"],
+    }
+  );
+
+const lendingRepayRequestSchema = z
+  .object({
+    collateralToken: tokenIdentifierSchema,
+    debtToken: tokenIdentifierSchema,
+    amount: nonNegativeAmountSchema,
+    provider: providerSchema.optional(),
+    poolAddress: addressSchema.optional(),
+    user: addressSchema.optional(),
+    collateralAmount: nonNegativeAmountSchema.optional(),
+    collateralDenomination: lendingAmountDenominationSchema.optional(),
+    debtDenomination: lendingAmountDenominationSchema.optional(),
+    withdrawCollateral: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.collateralToken.trim().toLowerCase() !==
+      value.debtToken.trim().toLowerCase(),
+    {
+      message: "collateralToken and debtToken must be different",
+      path: ["debtToken"],
+    }
+  );
+
+const lendingPositionRequestSchema = z
+  .object({
+    collateralToken: tokenIdentifierSchema,
+    debtToken: tokenIdentifierSchema,
+    provider: providerSchema.optional(),
+    poolAddress: addressSchema.optional(),
+    user: addressSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.collateralToken.trim().toLowerCase() !==
+      value.debtToken.trim().toLowerCase(),
+    {
+      message: "collateralToken and debtToken must be different",
+      path: ["debtToken"],
+    }
+  );
+
+const lendingHealthRequestSchema = lendingPositionRequestSchema;
+
+const lendingActionRequestSchema = z.discriminatedUnion("action", [
+  z
+    .object({
+      action: z.literal("deposit"),
+      request: lendingDepositRequestSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("withdraw"),
+      request: lendingWithdrawRequestSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("borrow"),
+      request: lendingBorrowRequestSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("repay"),
+      request: lendingRepayRequestSchema,
+    })
+    .strict(),
+]);
+
+const lendingBorrowToolSchema = z
+  .object({
+    collateralToken: tokenIdentifierSchema,
+    debtToken: tokenIdentifierSchema,
+    amount: nonNegativeAmountSchema,
+    provider: providerSchema.optional(),
+    poolAddress: addressSchema.optional(),
+    user: addressSchema.optional(),
+    collateralAmount: nonNegativeAmountSchema.optional(),
+    collateralDenomination: lendingAmountDenominationSchema.optional(),
+    debtDenomination: lendingAmountDenominationSchema.optional(),
+    useEarnPosition: z.boolean().optional(),
+    sponsored: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.collateralToken.trim().toLowerCase() !==
+      value.debtToken.trim().toLowerCase(),
+    {
+      message: "collateralToken and debtToken must be different",
+      path: ["debtToken"],
+    }
+  );
+
+const lendingRepayToolSchema = z
+  .object({
+    collateralToken: tokenIdentifierSchema,
+    debtToken: tokenIdentifierSchema,
+    amount: nonNegativeAmountSchema,
+    provider: providerSchema.optional(),
+    poolAddress: addressSchema.optional(),
+    user: addressSchema.optional(),
+    collateralAmount: nonNegativeAmountSchema.optional(),
+    collateralDenomination: lendingAmountDenominationSchema.optional(),
+    debtDenomination: lendingAmountDenominationSchema.optional(),
+    withdrawCollateral: z.boolean().optional(),
+    sponsored: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.collateralToken.trim().toLowerCase() !==
+      value.debtToken.trim().toLowerCase(),
+    {
+      message: "collateralToken and debtToken must be different",
+      path: ["debtToken"],
+    }
+  );
 
 const entrypointSchema = z
   .string()
@@ -444,6 +630,31 @@ export const schemas = {
       .max(10, "Maximum 10 calls per estimate batch"),
   }),
   starkzap_get_quote: swapInputSchema,
+  starkzap_lending_markets: z
+    .object({
+      provider: providerSchema.optional(),
+    })
+    .strict(),
+  starkzap_lending_deposit: lendingDepositRequestSchema.extend({
+    sponsored: z.boolean().optional(),
+  }),
+  starkzap_lending_withdraw: lendingWithdrawRequestSchema.extend({
+    sponsored: z.boolean().optional(),
+  }),
+  starkzap_lending_withdraw_max: lendingWithdrawMaxRequestSchema.extend({
+    sponsored: z.boolean().optional(),
+  }),
+  starkzap_lending_borrow: lendingBorrowToolSchema,
+  starkzap_lending_repay: lendingRepayToolSchema,
+  starkzap_lending_position: lendingPositionRequestSchema,
+  starkzap_lending_health: lendingHealthRequestSchema,
+  starkzap_lending_quote_health: z
+    .object({
+      action: lendingActionRequestSchema,
+      health: lendingHealthRequestSchema,
+      sponsored: z.boolean().optional(),
+    })
+    .strict(),
   starkzap_swap: swapInputBaseSchema
     .extend({
       sponsored: z.boolean().optional(),
@@ -731,6 +942,471 @@ export function buildTools(maxAmount: string, maxBatchAmount: string): Tool[] {
           },
         },
         required: ["tokenIn", "tokenOut", "amountIn"],
+      },
+    },
+    {
+      name: "starkzap_lending_markets",
+      description:
+        "Get lending markets from the configured provider for the current network.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        additionalProperties: false,
+        properties: {
+          provider: {
+            type: "string",
+            maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
+            description:
+              "Optional lending provider id (defaults to wallet provider, e.g. vesu)",
+          },
+        },
+      },
+    },
+    {
+      name: "starkzap_lending_deposit",
+      description: `Deposit tokens into a lending market. Maximum ${maxAmount} tokens per operation.`,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        additionalProperties: false,
+        properties: {
+          token: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Deposit token symbol or contract address",
+          },
+          amount: {
+            type: "string",
+            maxLength: 32,
+            pattern: "^\\d+(\\.\\d+)?$",
+            description: 'Human-readable deposit amount (e.g. "10.5")',
+          },
+          provider: {
+            type: "string",
+            maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
+            description: "Optional lending provider id",
+          },
+          poolAddress: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional lending pool address override",
+          },
+          receiver: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional receiver address override",
+          },
+          sponsored: {
+            type: "boolean",
+            description: "Use paymaster for gasless tx (default: false)",
+          },
+        },
+        required: ["token", "amount"],
+      },
+    },
+    {
+      name: "starkzap_lending_withdraw",
+      description: `Withdraw tokens from a lending market. Maximum ${maxAmount} tokens per operation.`,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        additionalProperties: false,
+        properties: {
+          token: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Withdraw token symbol or contract address",
+          },
+          amount: {
+            type: "string",
+            maxLength: 32,
+            pattern: "^\\d+(\\.\\d+)?$",
+            description: 'Human-readable withdraw amount (e.g. "10.5")',
+          },
+          provider: {
+            type: "string",
+            maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
+            description: "Optional lending provider id",
+          },
+          poolAddress: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional lending pool address override",
+          },
+          receiver: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional receiver address override",
+          },
+          owner: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional owner address override",
+          },
+          sponsored: {
+            type: "boolean",
+            description: "Use paymaster for gasless tx (default: false)",
+          },
+        },
+        required: ["token", "amount"],
+      },
+    },
+    {
+      name: "starkzap_lending_withdraw_max",
+      description:
+        "Withdraw the maximum available balance from a lending market.",
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        additionalProperties: false,
+        properties: {
+          token: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Withdraw token symbol or contract address",
+          },
+          provider: {
+            type: "string",
+            maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
+            description: "Optional lending provider id",
+          },
+          poolAddress: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional lending pool address override",
+          },
+          receiver: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional receiver address override",
+          },
+          owner: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional owner address override",
+          },
+          sponsored: {
+            type: "boolean",
+            description: "Use paymaster for gasless tx (default: false)",
+          },
+        },
+        required: ["token"],
+      },
+    },
+    {
+      name: "starkzap_lending_borrow",
+      description: `Borrow against collateral in a lending market. Amount and collateralAmount may be "0" for supply-like position adjustments. Maximum ${maxAmount} tokens per operation.`,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        additionalProperties: false,
+        properties: {
+          collateralToken: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Collateral token symbol or contract address",
+          },
+          debtToken: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Debt token symbol or contract address",
+          },
+          amount: {
+            type: "string",
+            maxLength: 32,
+            pattern: "^\\d+(\\.\\d+)?$",
+            description:
+              'Human-readable borrow amount (can be "0" for collateral-only adjustment)',
+          },
+          provider: {
+            type: "string",
+            maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
+            description: "Optional lending provider id",
+          },
+          poolAddress: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional lending pool address override",
+          },
+          user: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional position owner override",
+          },
+          collateralAmount: {
+            type: "string",
+            maxLength: 32,
+            pattern: "^\\d+(\\.\\d+)?$",
+            description:
+              'Optional collateral amount (can be "0" for debt-only adjustment)',
+          },
+          collateralDenomination: {
+            type: "string",
+            enum: ["assets", "native"],
+            description: "Optional collateral amount denomination",
+          },
+          debtDenomination: {
+            type: "string",
+            enum: ["assets", "native"],
+            description: "Optional debt amount denomination",
+          },
+          useEarnPosition: {
+            type: "boolean",
+            description: "Include redeemable earn position collateral",
+          },
+          sponsored: {
+            type: "boolean",
+            description: "Use paymaster for gasless tx (default: false)",
+          },
+        },
+        required: ["collateralToken", "debtToken", "amount"],
+      },
+    },
+    {
+      name: "starkzap_lending_repay",
+      description: `Repay debt in a lending market. Amount and collateralAmount may be "0" for collateral-only adjustment. Maximum ${maxAmount} tokens per operation.`,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        additionalProperties: false,
+        properties: {
+          collateralToken: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Collateral token symbol or contract address",
+          },
+          debtToken: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Debt token symbol or contract address",
+          },
+          amount: {
+            type: "string",
+            maxLength: 32,
+            pattern: "^\\d+(\\.\\d+)?$",
+            description:
+              'Human-readable repay amount (can be "0" for collateral-only adjustment)',
+          },
+          provider: {
+            type: "string",
+            maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
+            description: "Optional lending provider id",
+          },
+          poolAddress: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional lending pool address override",
+          },
+          user: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional position owner override",
+          },
+          collateralAmount: {
+            type: "string",
+            maxLength: 32,
+            pattern: "^\\d+(\\.\\d+)?$",
+            description:
+              'Optional collateral amount to withdraw or preserve (can be "0")',
+          },
+          collateralDenomination: {
+            type: "string",
+            enum: ["assets", "native"],
+            description: "Optional collateral amount denomination",
+          },
+          debtDenomination: {
+            type: "string",
+            enum: ["assets", "native"],
+            description: "Optional debt amount denomination",
+          },
+          withdrawCollateral: {
+            type: "boolean",
+            description: "Withdraw collateral as part of the repay operation",
+          },
+          sponsored: {
+            type: "boolean",
+            description: "Use paymaster for gasless tx (default: false)",
+          },
+        },
+        required: ["collateralToken", "debtToken", "amount"],
+      },
+    },
+    {
+      name: "starkzap_lending_position",
+      description:
+        "Get the current lending position for a collateral/debt market pair.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        additionalProperties: false,
+        properties: {
+          collateralToken: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Collateral token symbol or contract address",
+          },
+          debtToken: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Debt token symbol or contract address",
+          },
+          provider: {
+            type: "string",
+            maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
+            description: "Optional lending provider id",
+          },
+          poolAddress: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional lending pool address override",
+          },
+          user: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional position owner override",
+          },
+        },
+        required: ["collateralToken", "debtToken"],
+      },
+    },
+    {
+      name: "starkzap_lending_health",
+      description:
+        "Get the current health snapshot for a collateral/debt market pair.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        additionalProperties: false,
+        properties: {
+          collateralToken: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Collateral token symbol or contract address",
+          },
+          debtToken: {
+            type: "string",
+            minLength: 1,
+            maxLength: 128,
+            pattern: ".*\\S.*",
+            description: "Debt token symbol or contract address",
+          },
+          provider: {
+            type: "string",
+            maxLength: 64,
+            pattern: "^[A-Za-z0-9._:-]+$",
+            description: "Optional lending provider id",
+          },
+          poolAddress: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional lending pool address override",
+          },
+          user: {
+            type: "string",
+            pattern: "^0x[0-9a-fA-F]{1,64}$",
+            description: "Optional position owner override",
+          },
+        },
+        required: ["collateralToken", "debtToken"],
+      },
+    },
+    {
+      name: "starkzap_lending_quote_health",
+      description:
+        "Simulate a lending action and return current health, projected health, and preflight status without executing.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        type: "object" as const,
+        additionalProperties: false,
+        properties: {
+          action: {
+            type: "object",
+            description:
+              "Nested lending action input. request shape depends on the action discriminator.",
+          },
+          health: {
+            type: "object",
+            description: "Target lending position to evaluate.",
+          },
+          sponsored: {
+            type: "boolean",
+            description:
+              "Assume sponsored execution when simulating paymaster-backed writes",
+          },
+        },
+        required: ["action", "health"],
       },
     },
     {
@@ -1069,6 +1745,10 @@ export const READ_ONLY_TOOLS = new Set([
   "starkzap_get_balances",
   "starkzap_build_calls",
   "starkzap_get_quote",
+  "starkzap_lending_markets",
+  "starkzap_lending_position",
+  "starkzap_lending_health",
+  "starkzap_lending_quote_health",
   "starkzap_build_swap_calls",
   "starkzap_get_pool_position",
   "starkzap_estimate_fee",

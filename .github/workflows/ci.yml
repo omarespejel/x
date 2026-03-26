@@ -52,11 +52,20 @@ jobs:
       - name: Typecheck
         run: npm run -s typecheck
 
+      - name: Typecheck Adapters
+        run: npm run -s typecheck:adapters
+
       - name: Build
         run: npm run -s build
 
+      - name: Build Adapters
+        run: npm run -s build:adapters
+
       - name: Unit tests
         run: npm run -s test
+
+      - name: Adapter tests
+        run: npm run -s test:adapters
 
   examples:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
