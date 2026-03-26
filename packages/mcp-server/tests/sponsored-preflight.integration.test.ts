@@ -19,7 +19,7 @@ beforeAll(async () => {
   process.env.STARKZAP_MCP_ENABLE_TEST_HOOKS = "1";
   process.env.STARKZAP_MCP_TEST_KEY_MARKER =
     "TEST_KEY_DO_NOT_USE_IN_PRODUCTION";
-  process.env.STARKNET_PRIVATE_KEY = `0x${"1".padStart(64, "0")}`;
+  process.env.STARKNET_PRIVATE_KEY = "0x1";
   process.argv = [
     "node",
     "sponsored-preflight.integration.test.ts",

@@ -53,17 +53,17 @@ This server handles real funds. The following protections are built in:
 
 ### Environment Variables
 
-| Variable                             | Required | Description                                                                                     |
-| ------------------------------------ | -------- | ----------------------------------------------------------------------------------------------- |
-| `STARKNET_PRIVATE_KEY`               | Yes      | Stark curve private key (`0x` + exactly 64 hex chars, cryptographically valid)                  |
-| `STARKNET_ACCOUNT_ADDRESS`           | No       | Override derived account address (useful for funded/deployed accounts from existing setups)     |
-| `STARKNET_RPC_URL`                   | No       | Custom RPC endpoint (overrides network preset; HTTPS required except localhost HTTP)            |
-| `STARKNET_PAYMASTER_URL`             | No       | Custom paymaster endpoint for sponsored tx (HTTPS required except localhost HTTP)               |
-| `AVNU_PAYMASTER_API_KEY`             | No       | API key sent as `x-paymaster-api-key` for sponsored tx on AVNU paymaster                        |
-| `STARKNET_RPC_TIMEOUT_MS`            | No       | RPC timeout in milliseconds (default: `30000`)                                                  |
-| `STARKNET_POOL_CACHE_TTL_MS`         | No       | Pool class-hash cache TTL in ms (default: `30000`, set `0` to disable cache)                    |
-| `STARKNET_STAKING_CONTRACT`          | No       | Staking contract address (enables staking tools)                                                |
-| `STARKNET_STAKING_POOL_CLASS_HASHES` | No       | Comma-separated allowlist of pool contract class hashes (0x...) for strict pool-type validation |
+| Variable                             | Required | Description                                                                                                 |
+| ------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------- |
+| `STARKNET_PRIVATE_KEY`               | Yes      | Stark curve private key (`0x` + 1-64 hex chars; shorter keys are left-padded to 32 bytes before validation) |
+| `STARKNET_ACCOUNT_ADDRESS`           | No       | Override derived account address (useful for funded/deployed accounts from existing setups)                 |
+| `STARKNET_RPC_URL`                   | No       | Custom RPC endpoint (overrides network preset; HTTPS required except localhost HTTP)                        |
+| `STARKNET_PAYMASTER_URL`             | No       | Custom paymaster endpoint for sponsored tx (HTTPS required except localhost HTTP)                           |
+| `AVNU_PAYMASTER_API_KEY`             | No       | API key sent as `x-paymaster-api-key` for sponsored tx on AVNU paymaster                                    |
+| `STARKNET_RPC_TIMEOUT_MS`            | No       | RPC timeout in milliseconds (default: `30000`)                                                              |
+| `STARKNET_POOL_CACHE_TTL_MS`         | No       | Pool class-hash cache TTL in ms (default: `30000`, set `0` to disable cache)                                |
+| `STARKNET_STAKING_CONTRACT`          | No       | Staking contract address (enables staking tools)                                                            |
+| `STARKNET_STAKING_POOL_CLASS_HASHES` | No       | Comma-separated allowlist of pool contract class hashes (0x...) for strict pool-type validation             |
 
 ### CLI Arguments
 
@@ -219,7 +219,7 @@ Use this sequence when validating real writes (not just tests):
 
 Troubleshooting from live runs:
 
-- If startup says private key is invalid, check key length: it must be 64 hex chars after `0x` (32 bytes). If your source omits a leading zero, left-pad before use.
+- If startup says private key is invalid, check that it is a `0x`-prefixed hex string representing a valid Stark curve scalar. Shorter hex values are accepted and normalized by left-padding to 32 bytes.
 - If your expected wallet address does not match, trust `starkzap_get_account` output. The MCP either derives from `STARKNET_PRIVATE_KEY` or uses `STARKNET_ACCOUNT_ADDRESS` when provided.
 - If sponsored deploy/transfer fails with paymaster errors (e.g. invalid API key), use funded user-pays mode or configure a valid paymaster setup in your environment.
 - In sponsored mode, account class-hash validation runs after tx confirmation as a safety audit check. This detects unexpected account classes but cannot prevent a misbehaving paymaster from submitting the first tx.
