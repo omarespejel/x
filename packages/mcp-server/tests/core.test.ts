@@ -144,6 +144,44 @@ describe("schema hardening", () => {
     expect(parsed.success).toBe(false);
   });
 
+  it("bounds build-calls at 10", () => {
+    const calls = Array.from({ length: 11 }, () => ({
+      contractAddress: TEST_TOKEN.address,
+      entrypoint: "transfer",
+      calldata: [],
+    }));
+    const parsed = schemas.starkzap_build_calls.safeParse({ calls });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejects unknown properties in build-calls payload", () => {
+    const parsed = schemas.starkzap_build_calls.safeParse({
+      calls: [
+        {
+          contractAddress: TEST_TOKEN.address,
+          entrypoint: "transfer",
+          calldata: [],
+          extra: "nope",
+        },
+      ],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejects unknown top-level properties in build-calls payload", () => {
+    const parsed = schemas.starkzap_build_calls.safeParse({
+      calls: [
+        {
+          contractAddress: TEST_TOKEN.address,
+          entrypoint: "transfer",
+          calldata: [],
+        },
+      ],
+      extra: "nope",
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it("bounds get-balances token batches at 32", () => {
     const tokens = Array.from({ length: 33 }, (_, index) => `TOKEN_${index}`);
     const parsed = schemas.starkzap_get_balances.safeParse({ tokens });
@@ -285,6 +323,7 @@ describe("tool gating and parity", () => {
     });
     const names = new Set(readOnlyOnly.map((tool) => tool.name));
     expect(names.has("starkzap_get_account")).toBe(true);
+    expect(names.has("starkzap_build_calls")).toBe(true);
     expect(names.has("starkzap_get_balances")).toBe(true);
     expect(names.has("starkzap_get_quote")).toBe(true);
     expect(names.has("starkzap_build_swap_calls")).toBe(true);

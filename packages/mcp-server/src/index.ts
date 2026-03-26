@@ -46,6 +46,11 @@ import {
   validateAddressBatch,
   validateAddressOrThrow,
 } from "./core.js";
+import {
+  isP0ActionName,
+  runP0Action,
+  type P0ActionContext,
+} from "./p0-actions.js";
 
 const require = createRequire(import.meta.url);
 
@@ -1490,6 +1495,22 @@ async function maybeResetWalletOnRpcError(error: unknown): Promise<void> {
   await cleanupWalletAndSdkResources();
 }
 
+const p0ActionContext: P0ActionContext = {
+  maxAmount,
+  getWallet,
+  resolveToken,
+  withTimeout,
+  parseAmountWithContext,
+  sanitizeTokenSymbol,
+  mapWithConcurrencyLimit,
+  assertAmountMethods,
+  assertDistinctSwapTokens,
+  assertSwapQuoteShape,
+  assertWalletAccountClassHash,
+  waitForTrackedTransaction,
+  normalizeCallForResponse,
+};
+
 function buildToolErrorText(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const normalizedMessage = message.replace(/\s+/g, " ").trim();
@@ -1509,6 +1530,7 @@ function buildToolErrorText(error: unknown): string {
     "Address ",
     "Swap ",
     "Build swap calls:",
+    "Build calls ",
     "starkzap_",
   ];
   const hasSafePrefix = safeMessagePrefixes.some((prefix) =>
@@ -1562,6 +1584,10 @@ async function handleTool(
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
   });
 
+  if (isP0ActionName(name)) {
+    return ok(await runP0Action(p0ActionContext, name, rawArgs));
+  }
+
   switch (name) {
     case "starkzap_get_account": {
       const provider = wallet.getProvider();
@@ -1609,87 +1635,6 @@ async function handleTool(
         formatted: balance.toFormatted(),
         raw: balance.toBase().toString(),
         decimals: balance.getDecimals(),
-      });
-    }
-
-    case "starkzap_get_balances": {
-      const parsed = args as z.infer<typeof schemas.starkzap_get_balances>;
-      const resolvedTokens = parsed.tokens.map((tokenInput) =>
-        resolveToken(tokenInput)
-      );
-      const balances = await mapWithConcurrencyLimit(
-        resolvedTokens,
-        8,
-        async (token) => {
-          const balance = await withTimeout(
-            `Token balance query (${token.symbol})`,
-            () => wallet.balanceOf(token)
-          );
-          assertAmountMethods(balance, "balance", [
-            "toUnit",
-            "toFormatted",
-            "toBase",
-            "getDecimals",
-          ]);
-          return {
-            token: sanitizeTokenSymbol(token.symbol),
-            address: token.address,
-            balance: balance.toUnit(),
-            formatted: balance.toFormatted(),
-            raw: balance.toBase().toString(),
-            decimals: balance.getDecimals(),
-          };
-        }
-      );
-      return ok({
-        balances,
-      });
-    }
-
-    case "starkzap_get_quote": {
-      const parsed = args as z.infer<typeof schemas.starkzap_get_quote>;
-      const tokenIn = resolveToken(parsed.tokenIn);
-      const tokenOut = resolveToken(parsed.tokenOut);
-      assertDistinctSwapTokens(tokenIn, tokenOut, "Swap quote");
-      const amountIn = parseAmountWithContext(
-        parsed.amountIn,
-        tokenIn,
-        "quote"
-      );
-      assertAmountWithinCap(amountIn, tokenIn, maxAmount);
-      const quote = await withTimeout("Swap quote query", () =>
-        wallet.getQuote({
-          tokenIn,
-          tokenOut,
-          amountIn,
-          ...(parsed.slippageBps !== undefined && {
-            slippageBps: BigInt(parsed.slippageBps),
-          }),
-          ...(parsed.provider !== undefined && { provider: parsed.provider }),
-        })
-      );
-      assertSwapQuoteShape(quote);
-      const quotedInAmount = Amount.fromRaw(quote.amountInBase, tokenIn);
-      const quotedOutAmount = Amount.fromRaw(quote.amountOutBase, tokenOut);
-      return ok({
-        tokenIn: sanitizeTokenSymbol(tokenIn.symbol),
-        tokenInAddress: tokenIn.address,
-        tokenOut: sanitizeTokenSymbol(tokenOut.symbol),
-        tokenOutAddress: tokenOut.address,
-        amountIn: quotedInAmount.toUnit(),
-        amountInRaw: quote.amountInBase.toString(),
-        amountOut: quotedOutAmount.toUnit(),
-        amountOutRaw: quote.amountOutBase.toString(),
-        ...(quote.routeCallCount !== undefined && {
-          routeCallCount: quote.routeCallCount,
-        }),
-        ...(quote.priceImpactBps !== undefined && {
-          priceImpactBps:
-            quote.priceImpactBps === null
-              ? null
-              : quote.priceImpactBps.toString(),
-        }),
-        ...(quote.provider !== undefined && { provider: quote.provider }),
       });
     }
 
@@ -1789,147 +1734,6 @@ async function handleTool(
         hash: txResult.hash,
         explorerUrl: txResult.explorerUrl,
         callCount: calls.length,
-      });
-    }
-
-    case "starkzap_swap": {
-      const parsed = args as z.infer<typeof schemas.starkzap_swap>;
-      const tokenIn = resolveToken(parsed.tokenIn);
-      const tokenOut = resolveToken(parsed.tokenOut);
-      assertDistinctSwapTokens(tokenIn, tokenOut, "Swap execution");
-      const amountIn = parseAmountWithContext(parsed.amountIn, tokenIn, "swap");
-      assertAmountWithinCap(amountIn, tokenIn, maxAmount);
-      const quote = await withTimeout("Swap quote precheck", () =>
-        wallet.getQuote({
-          tokenIn,
-          tokenOut,
-          amountIn,
-          ...(parsed.slippageBps !== undefined && {
-            slippageBps: BigInt(parsed.slippageBps),
-          }),
-          ...(parsed.provider !== undefined && { provider: parsed.provider }),
-        })
-      );
-      assertSwapQuoteShape(quote);
-      const quotedOutAmount = Amount.fromRaw(quote.amountOutBase, tokenOut);
-      const feeMode: "sponsored" | undefined = parsed.sponsored
-        ? "sponsored"
-        : undefined;
-      if (feeMode === "sponsored") {
-        await assertWalletAccountClassHash(wallet, "Sponsored swap preflight");
-      }
-      const tx = await withTimeout("Swap transaction submission", () =>
-        wallet.swap(
-          {
-            tokenIn,
-            tokenOut,
-            amountIn,
-            ...(parsed.slippageBps !== undefined && {
-              slippageBps: BigInt(parsed.slippageBps),
-            }),
-            ...(parsed.provider !== undefined && { provider: parsed.provider }),
-          },
-          {
-            ...(feeMode && { feeMode }),
-          }
-        )
-      );
-      const txResult = await waitForTrackedTransaction(tx);
-      if (feeMode === "sponsored") {
-        await assertWalletAccountClassHash(wallet, "Sponsored swap post-check");
-      }
-      return ok({
-        hash: txResult.hash,
-        explorerUrl: txResult.explorerUrl,
-        tokenIn: sanitizeTokenSymbol(tokenIn.symbol),
-        tokenInAddress: tokenIn.address,
-        tokenOut: sanitizeTokenSymbol(tokenOut.symbol),
-        tokenOutAddress: tokenOut.address,
-        amountIn: amountIn.toUnit(),
-        amountInRaw: amountIn.toBase().toString(),
-        amountOut: quotedOutAmount.toUnit(),
-        amountOutRaw: quote.amountOutBase.toString(),
-        amountOutSource: "pretrade_quote",
-        ...(quote.routeCallCount !== undefined && {
-          routeCallCount: quote.routeCallCount,
-        }),
-        ...(quote.priceImpactBps !== undefined && {
-          priceImpactBps:
-            quote.priceImpactBps === null
-              ? null
-              : quote.priceImpactBps.toString(),
-        }),
-        ...(quote.provider !== undefined && { provider: quote.provider }),
-      });
-    }
-
-    case "starkzap_build_swap_calls": {
-      const parsed = args as z.infer<typeof schemas.starkzap_build_swap_calls>;
-      const tokenIn = resolveToken(parsed.tokenIn);
-      const tokenOut = resolveToken(parsed.tokenOut);
-      assertDistinctSwapTokens(tokenIn, tokenOut, "Build swap calls");
-      const amountIn = parseAmountWithContext(
-        parsed.amountIn,
-        tokenIn,
-        "build_swap_calls"
-      );
-      assertAmountWithinCap(amountIn, tokenIn, maxAmount);
-      const rawCalls = await withTimeout("Swap call build", async () =>
-        wallet
-          .tx()
-          .swap({
-            tokenIn,
-            tokenOut,
-            amountIn,
-            ...(parsed.slippageBps !== undefined && {
-              slippageBps: BigInt(parsed.slippageBps),
-            }),
-            ...(parsed.provider !== undefined && { provider: parsed.provider }),
-          })
-          .calls()
-      );
-      if (
-        !Array.isArray(rawCalls) ||
-        rawCalls.length === 0 ||
-        rawCalls.length > 10
-      ) {
-        throw new Error(
-          "Invalid swap calls returned by SDK: expected 1-10 calls."
-        );
-      }
-      const formattedCalls = rawCalls.map((call, index) =>
-        normalizeCallForResponse(call, `swap_call_${index}`)
-      );
-      const totalCalldataItems = formattedCalls.reduce(
-        (sum, call) => sum + call.calldata.length,
-        0
-      );
-      const MAX_SWAP_CALLDATA_ITEMS = 4096;
-      if (totalCalldataItems > MAX_SWAP_CALLDATA_ITEMS) {
-        throw new Error(
-          `Invalid swap calls returned by SDK: calldata item count exceeds ${MAX_SWAP_CALLDATA_ITEMS}.`
-        );
-      }
-      const totalCalldataChars = formattedCalls.reduce(
-        (sum, call) =>
-          sum +
-          call.calldata.reduce((callSum, value) => callSum + value.length, 0),
-        0
-      );
-      const MAX_SWAP_CALLDATA_CHARS = 65_536;
-      if (totalCalldataChars > MAX_SWAP_CALLDATA_CHARS) {
-        throw new Error(
-          `Invalid swap calls returned by SDK: calldata payload exceeds ${MAX_SWAP_CALLDATA_CHARS} characters.`
-        );
-      }
-      return ok({
-        tokenIn: sanitizeTokenSymbol(tokenIn.symbol),
-        tokenInAddress: tokenIn.address,
-        tokenOut: sanitizeTokenSymbol(tokenOut.symbol),
-        tokenOutAddress: tokenOut.address,
-        amountIn: amountIn.toUnit(),
-        amountInRaw: amountIn.toBase().toString(),
-        calls: formattedCalls,
       });
     }
 

@@ -6,6 +6,8 @@ Any MCP-compatible client (Claude, Cursor, OpenAI Agents SDK, etc.) can use thes
 
 Package and binary names are `starkzap-mcp`.
 
+For shell and CI automation, there is also a sibling CLI adapter in `packages/cli` (`starkzap-cli`) that reuses the same P0 action handlers.
+
 ## Why
 
 Following the pattern established by [Stripe](https://github.com/stripe/agent-toolkit), [Coinbase](https://github.com/coinbase/payments-mcp), and [Alchemy](https://github.com/alchemyplatform/alchemy-mcp-server): the SDK owner ships the MCP server. This keeps tool definitions in sync with the SDK and makes the tools available to any MCP client — not just one framework.
@@ -67,16 +69,16 @@ This server handles real funds. The following protections are built in:
 
 ### CLI Arguments
 
-| Argument                 | Default                | Description                                                                                                                                                                                                   |
-| ------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--network`              | `mainnet`              | Network preset: `mainnet` or `sepolia` (validated at startup)                                                                                                                                                 |
-| `--max-amount`           | `1000`                 | Max tokens per individual amount-bearing operation                                                                                                                                                            |
-| `--max-batch-amount`     | `same as --max-amount` | Max total tokens across one `starkzap_transfer` batch call                                                                                                                                                    |
-| `--rate-limit-rpm`       | `0` (disabled)         | Global MCP tool-call rate limit per minute                                                                                                                                                                    |
-| `--read-rate-limit-rpm`  | `0` (disabled)         | Optional read-only bucket (`starkzap_get_account`, `starkzap_get_balance`, `starkzap_get_balances`, `starkzap_get_quote`, `starkzap_build_swap_calls`, `starkzap_get_pool_position`, `starkzap_estimate_fee`) |
-| `--write-rate-limit-rpm` | `0` (disabled)         | Optional state-changing bucket (transfer/swap/staking/deploy/execute)                                                                                                                                         |
-| `--enable-write`         | off                    | Enable state-changing tools (transfer, swap, stake, deploy)                                                                                                                                                   |
-| `--enable-execute`       | off                    | Enable only the unrestricted `starkzap_execute` tool                                                                                                                                                          |
+| Argument                 | Default                | Description                                                                                                                                                                                                                           |
+| ------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--network`              | `mainnet`              | Network preset: `mainnet` or `sepolia` (validated at startup)                                                                                                                                                                         |
+| `--max-amount`           | `1000`                 | Max tokens per individual amount-bearing operation                                                                                                                                                                                    |
+| `--max-batch-amount`     | `same as --max-amount` | Max total tokens across one `starkzap_transfer` batch call                                                                                                                                                                            |
+| `--rate-limit-rpm`       | `0` (disabled)         | Global MCP tool-call rate limit per minute                                                                                                                                                                                            |
+| `--read-rate-limit-rpm`  | `0` (disabled)         | Optional read-only bucket (`starkzap_get_account`, `starkzap_get_balance`, `starkzap_get_balances`, `starkzap_build_calls`, `starkzap_get_quote`, `starkzap_build_swap_calls`, `starkzap_get_pool_position`, `starkzap_estimate_fee`) |
+| `--write-rate-limit-rpm` | `0` (disabled)         | Optional state-changing bucket (transfer/swap/staking/deploy/execute)                                                                                                                                                                 |
+| `--enable-write`         | off                    | Enable state-changing tools (transfer, swap, stake, deploy)                                                                                                                                                                           |
+| `--enable-execute`       | off                    | Enable only the unrestricted `starkzap_execute` tool                                                                                                                                                                                  |
 
 ## MCP Client Configuration
 
@@ -135,6 +137,7 @@ const mcpServer = new McpServerStdio({
 | `starkzap_get_account`    | Get connected account address/deployment/class hash details |
 | `starkzap_get_balance`    | Get ERC20 token balance (human-readable + raw)              |
 | `starkzap_get_balances`   | Get balances for multiple tokens in one tool call           |
+| `starkzap_build_calls`    | Build and normalize raw contract calls without execution    |
 | `starkzap_transfer`       | Transfer tokens to one or more recipients                   |
 | `starkzap_execute`        | Execute raw contract calls atomically                       |
 | `starkzap_deploy_account` | Deploy the account contract on-chain                        |
