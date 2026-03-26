@@ -83,9 +83,18 @@ const {
 // ---------------------------------------------------------------------------
 // Environment
 // ---------------------------------------------------------------------------
+function normalizePrivateKeyHex(value: string): string {
+  const hex = value.slice(2);
+  return `0x${hex.padStart(64, "0")}`;
+}
+
 const privateKeySchema = z
   .string()
-  .regex(/^0x[0-9a-fA-F]{64}$/, "Must be a 0x-prefixed 32-byte hex private key")
+  .regex(
+    /^0x[0-9a-fA-F]{1,64}$/,
+    "Must be a 0x-prefixed hex private key (1-64 hex chars)"
+  )
+  .transform(normalizePrivateKeyHex)
   .refine((value) => {
     const key = BigInt(value);
     return key !== 0n && key < STARK_CURVE_ORDER;

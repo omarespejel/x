@@ -75,7 +75,7 @@ beforeAll(async () => {
   process.env.STARKZAP_MCP_ENABLE_TEST_HOOKS = "1";
   process.env.STARKZAP_MCP_TEST_KEY_MARKER =
     "TEST_KEY_DO_NOT_USE_IN_PRODUCTION";
-  process.env.STARKNET_PRIVATE_KEY = `0x${"1".padStart(64, "0")}`;
+  process.env.STARKNET_PRIVATE_KEY = "0x1";
   process.env.STARKNET_ACCOUNT_ADDRESS = "0x2";
   process.env.STARKNET_STAKING_CONTRACT =
     "0x03745ab04a431fc02871a139be6b93d9260b0ff3e779ad9c8b377183b23109f1";
