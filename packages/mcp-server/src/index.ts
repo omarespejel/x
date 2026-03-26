@@ -46,6 +46,11 @@ import {
   validateAddressBatch,
   validateAddressOrThrow,
 } from "./core.js";
+import {
+  isP0ActionName,
+  runP0Action,
+  type P0ActionContext,
+} from "./p0-actions.js";
 
 const require = createRequire(import.meta.url);
 
@@ -81,9 +86,18 @@ const {
 // ---------------------------------------------------------------------------
 // Environment
 // ---------------------------------------------------------------------------
+function normalizePrivateKeyHex(value: string): string {
+  const hex = value.slice(2);
+  return `0x${hex.padStart(64, "0")}`;
+}
+
 const privateKeySchema = z
   .string()
-  .regex(/^0x[0-9a-fA-F]{64}$/, "Must be a 0x-prefixed 32-byte hex private key")
+  .regex(
+    /^0x[0-9a-fA-F]{1,64}$/,
+    "Must be a 0x-prefixed hex private key (1-64 hex chars)"
+  )
+  .transform(normalizePrivateKeyHex)
   .refine((value) => {
     const key = BigInt(value);
     return key !== 0n && key < STARK_CURVE_ORDER;
@@ -130,6 +144,7 @@ function isSecureRpcUrl(rawUrl: string): boolean {
 
 const envSchema = z.object({
   STARKNET_PRIVATE_KEY: privateKeySchema,
+  STARKNET_ACCOUNT_ADDRESS: contractAddressSchema.optional(),
   STARKNET_RPC_URL: z
     .string()
     .url()
@@ -426,11 +441,17 @@ async function getWallet(): Promise<Wallet> {
     );
   }
   if (!walletInitPromise) {
+    const accountAddressOverride = env.STARKNET_ACCOUNT_ADDRESS
+      ? validateAddressOrThrow(env.STARKNET_ACCOUNT_ADDRESS, "account")
+      : undefined;
     walletInitPromise = withTimeout("Wallet initialization", () =>
       getSdk().connectWallet({
         account: {
           signer: new StarkSigner(env.STARKNET_PRIVATE_KEY),
         },
+        ...(accountAddressOverride && {
+          accountAddress: accountAddressOverride,
+        }),
       })
     )
       .then((wallet) => {
@@ -533,6 +554,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+const FELT252_UPPER_BOUND = BigInt(
+  "0x800000000000011000000000000000000000000000000000000000000000001"
+);
+
 type AmountMethod =
   | "toUnit"
   | "toFormatted"
@@ -577,6 +602,44 @@ function parseAmountWithContext(
   }
 }
 
+function assertDistinctSwapTokens(
+  tokenIn: Token,
+  tokenOut: Token,
+  context: string
+): void {
+  const normalizedIn = fromAddress(tokenIn.address);
+  const normalizedOut = fromAddress(tokenOut.address);
+  if (normalizedIn === normalizedOut) {
+    throw new Error(
+      `${context}: tokenIn and tokenOut resolve to the same token (${sanitizeTokenSymbol(tokenIn.symbol)}).`
+    );
+  }
+}
+
+async function mapWithConcurrencyLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error(`Invalid concurrency limit: ${limit}`);
+  }
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+      }
+    }
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 function assertOverallFeeIsBigInt(fee: unknown): asserts fee is {
   overall_fee: bigint;
 } {
@@ -585,6 +648,171 @@ function assertOverallFeeIsBigInt(fee: unknown): asserts fee is {
       `Fee estimate response has invalid overall_fee type. Response: ${summarizeError(fee)}`
     );
   }
+}
+
+function assertSwapQuoteShape(quote: unknown): asserts quote is {
+  amountInBase: bigint;
+  amountOutBase: bigint;
+  routeCallCount?: number;
+  priceImpactBps?: bigint | null;
+  provider?: string;
+} {
+  const PROVIDER_ID_REGEX = /^[A-Za-z0-9._:-]+$/;
+  if (!isRecord(quote)) {
+    throw new Error(
+      "Invalid swap quote returned by SDK: expected object shape."
+    );
+  }
+  if (typeof quote.amountInBase !== "bigint") {
+    throw new Error(
+      "Invalid swap quote returned by SDK: amountInBase must be bigint."
+    );
+  }
+  if (typeof quote.amountOutBase !== "bigint") {
+    throw new Error(
+      "Invalid swap quote returned by SDK: amountOutBase must be bigint."
+    );
+  }
+  const routeCallCount = quote.routeCallCount;
+  if (routeCallCount !== undefined) {
+    if (
+      typeof routeCallCount !== "number" ||
+      !Number.isInteger(routeCallCount) ||
+      routeCallCount < 0
+    ) {
+      throw new Error(
+        "Invalid swap quote returned by SDK: routeCallCount must be a non-negative integer."
+      );
+    }
+  }
+  if (
+    quote.priceImpactBps !== undefined &&
+    quote.priceImpactBps !== null &&
+    typeof quote.priceImpactBps !== "bigint"
+  ) {
+    throw new Error(
+      "Invalid swap quote returned by SDK: priceImpactBps must be bigint or null."
+    );
+  }
+  if (
+    quote.provider !== undefined &&
+    (typeof quote.provider !== "string" ||
+      quote.provider.length === 0 ||
+      quote.provider.length > 64 ||
+      !PROVIDER_ID_REGEX.test(quote.provider))
+  ) {
+    throw new Error(
+      "Invalid swap quote returned by SDK: provider must be a safe provider id."
+    );
+  }
+}
+
+function normalizeCallCalldataForResponse(
+  calldata: unknown,
+  label: string
+): string[] {
+  const MAX_CALLDATA_ITEMS = 2048;
+  const MAX_CALLDATA_ITEM_CHARS = 256;
+  const CALLDATA_DECIMAL_REGEX = /^\d+$/;
+  const CALLDATA_HEX_REGEX = /^0x[0-9a-fA-F]{1,64}$/;
+  const assertFelt252Value = (value: bigint, index: number): void => {
+    if (value >= FELT252_UPPER_BOUND) {
+      throw new Error(
+        `Invalid ${label} returned by SDK: calldata_${index} exceeds felt range.`
+      );
+    }
+  };
+
+  if (!Array.isArray(calldata)) {
+    throw new Error(
+      `Invalid ${label} returned by SDK: calldata must be an array.`
+    );
+  }
+  if (calldata.length > MAX_CALLDATA_ITEMS) {
+    throw new Error(
+      `Invalid ${label} returned by SDK: calldata exceeds ${MAX_CALLDATA_ITEMS} items.`
+    );
+  }
+  return calldata.map((item, index) => {
+    if (typeof item === "bigint") {
+      if (item < 0n) {
+        throw new Error(
+          `Invalid ${label} returned by SDK: calldata_${index} must be non-negative.`
+        );
+      }
+      assertFelt252Value(item, index);
+      return `0x${item.toString(16)}`;
+    }
+    if (typeof item === "number") {
+      if (!Number.isSafeInteger(item) || item < 0) {
+        throw new Error(
+          `Invalid ${label} returned by SDK: calldata_${index} must be a non-negative safe integer.`
+        );
+      }
+      assertFelt252Value(BigInt(item), index);
+      return item.toString(10);
+    }
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (!trimmed || trimmed.length > MAX_CALLDATA_ITEM_CHARS) {
+        throw new Error(
+          `Invalid ${label} returned by SDK: calldata_${index} must be a felt-like hex or decimal string.`
+        );
+      }
+      if (CALLDATA_DECIMAL_REGEX.test(trimmed)) {
+        const decimalValue = BigInt(trimmed);
+        assertFelt252Value(decimalValue, index);
+        return trimmed;
+      }
+      if (CALLDATA_HEX_REGEX.test(trimmed)) {
+        assertFelt252Value(BigInt(trimmed), index);
+        return trimmed;
+      }
+      throw new Error(
+        `Invalid ${label} returned by SDK: calldata_${index} must be a felt-like hex or decimal string.`
+      );
+    }
+    throw new Error(
+      `Invalid ${label} returned by SDK: calldata_${index} has unsupported type.`
+    );
+  });
+}
+
+function normalizeCallForResponse(
+  call: unknown,
+  label: string
+): { contractAddress: Address; entrypoint: string; calldata: string[] } {
+  const ENTRYPOINT_IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+  if (!isRecord(call)) {
+    throw new Error(
+      `Invalid ${label} returned by SDK: call must be an object.`
+    );
+  }
+  if (typeof call.contractAddress !== "string") {
+    throw new Error(
+      `Invalid ${label} returned by SDK: contractAddress must be a string.`
+    );
+  }
+  const contractAddress = validateAddressOrThrow(
+    call.contractAddress,
+    "contract"
+  );
+  const entrypoint =
+    typeof call.entrypoint === "string" ? call.entrypoint.trim() : "";
+  if (
+    entrypoint.length === 0 ||
+    entrypoint.length > 64 ||
+    !ENTRYPOINT_IDENTIFIER_REGEX.test(entrypoint)
+  ) {
+    throw new Error(
+      `Invalid ${label} returned by SDK: entrypoint must be a valid Cairo identifier.`
+    );
+  }
+  return {
+    contractAddress,
+    entrypoint,
+    calldata: normalizeCallCalldataForResponse(call.calldata ?? [], label),
+  };
 }
 
 function requireFeeUnit(unit: unknown): string {
@@ -1267,6 +1495,22 @@ async function maybeResetWalletOnRpcError(error: unknown): Promise<void> {
   await cleanupWalletAndSdkResources();
 }
 
+const p0ActionContext: P0ActionContext = {
+  maxAmount,
+  getWallet,
+  resolveToken,
+  withTimeout,
+  parseAmountWithContext,
+  sanitizeTokenSymbol,
+  mapWithConcurrencyLimit,
+  assertAmountMethods,
+  assertDistinctSwapTokens,
+  assertSwapQuoteShape,
+  assertWalletAccountClassHash,
+  waitForTrackedTransaction,
+  normalizeCallForResponse,
+};
+
 function buildToolErrorText(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const normalizedMessage = message.replace(/\s+/g, " ").trim();
@@ -1281,8 +1525,12 @@ function buildToolErrorText(error: unknown): string {
     "Total ",
     "Could ",
     "Rate ",
+    "Sponsored ",
     "Transaction ",
     "Address ",
+    "Swap ",
+    "Build swap calls:",
+    "Build calls ",
     "starkzap_",
   ];
   const hasSafePrefix = safeMessagePrefixes.some((prefix) =>
@@ -1335,6 +1583,10 @@ async function handleTool(
   const ok = (data: unknown) => ({
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
   });
+
+  if (isP0ActionName(name)) {
+    return ok(await runP0Action(p0ActionContext, name, rawArgs));
+  }
 
   switch (name) {
     case "starkzap_get_account": {
@@ -1416,6 +1668,12 @@ async function handleTool(
       const feeMode: "sponsored" | undefined = parsed.sponsored
         ? "sponsored"
         : undefined;
+      if (feeMode === "sponsored") {
+        await assertWalletAccountClassHash(
+          wallet,
+          "Sponsored transfer preflight"
+        );
+      }
       const tx = await withTimeout("Token transfer submission", () =>
         wallet.transfer(token, transfers, {
           ...(feeMode && { feeMode }),
@@ -1454,6 +1712,12 @@ async function handleTool(
       const feeMode: "sponsored" | undefined = parsed.sponsored
         ? "sponsored"
         : undefined;
+      if (feeMode === "sponsored") {
+        await assertWalletAccountClassHash(
+          wallet,
+          "Sponsored execute preflight"
+        );
+      }
       const tx = await withTimeout("Contract execution submission", () =>
         wallet.execute(calls, {
           ...(feeMode && { feeMode }),
