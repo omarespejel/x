@@ -51,6 +51,10 @@ import {
 } from "./core.js";
 
 const require = createRequire(import.meta.url);
+// Published starkzap@2.0.0 still exposes "sponsored" in its distributed
+// FeeMode type/runtime. Switch to { type: "paymaster" } after the package
+// release that carries the canonical paymaster object form.
+const SPONSORED_FEE_MODE = "sponsored" as const;
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -1580,7 +1584,7 @@ async function handleTool(
         maxBatchAmount
       );
 
-      const feeMode = parsed.sponsored ? "sponsored" : undefined;
+      const feeMode = parsed.sponsored ? SPONSORED_FEE_MODE : undefined;
       if (parsed.sponsored) {
         await assertWalletAccountClassHashIfDeployed(
           wallet,
@@ -1623,7 +1627,7 @@ async function handleTool(
         entrypoint: call.entrypoint,
         calldata: call.calldata ?? [],
       }));
-      const feeMode = parsed.sponsored ? "sponsored" : undefined;
+      const feeMode = parsed.sponsored ? SPONSORED_FEE_MODE : undefined;
       if (parsed.sponsored) {
         await assertWalletAccountClassHashIfDeployed(
           wallet,
@@ -1704,7 +1708,7 @@ async function handleTool(
           address: wallet.address,
         });
       }
-      const feeMode = parsed.sponsored ? "sponsored" : undefined;
+      const feeMode = parsed.sponsored ? SPONSORED_FEE_MODE : undefined;
       const tx = await withTimeout("Account deployment submission", () =>
         wallet.deploy({
           ...(feeMode && { feeMode }),

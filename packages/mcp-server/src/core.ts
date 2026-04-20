@@ -921,7 +921,18 @@ function getObjectAdditionalProperties(type: z.ZodTypeAny): boolean | null {
   if (!(unwrapped instanceof z.ZodObject)) {
     return null;
   }
-  return unwrapped._def.unknownKeys === "strict" ? false : true;
+  const unknownKeys = (
+    unwrapped as {
+      _def?: { unknownKeys?: unknown };
+    }
+  )._def?.unknownKeys;
+  if (unknownKeys === "strict") {
+    return false;
+  }
+  if (unknownKeys === "strip" || unknownKeys === "passthrough") {
+    return true;
+  }
+  return null;
 }
 
 function getArrayItemObjectAdditionalProperties(
