@@ -3,16 +3,16 @@ import type {
   Call,
   EstimateFeeResponseOverhead,
   RpcProvider,
-  TypedData,
   Signature,
+  TypedData,
 } from "starknet";
 import type { Tx } from "@/tx";
 import type { TxBuilder } from "@/tx/builder";
 import type { Erc20 } from "@/erc20";
-import type { Staking } from "@/staking";
+import type { Staking, EndurStaking, EndurStakingOptions } from "@/staking";
 import type { LendingClient } from "@/lending";
 import type { DcaClientInterface } from "@/dca";
-import type { PreparedSwap, SwapInput, SwapQuote, SwapProvider } from "@/swap";
+import type { PreparedSwap, SwapInput, SwapProvider, SwapQuote } from "@/swap";
 import type {
   Address,
   Amount,
@@ -69,7 +69,7 @@ export interface WalletInterface extends BridgeOperatorInterface {
    * Deploy the account contract.
    * Returns a Tx object to track the deployment.
    *
-   * @param options.feeMode - How to pay for deployment ("user_pays" or "sponsored")
+   * @param options.feeMode - How to pay for deployment ("user_pays" or { type: "paymaster" })
    */
   deploy(options?: DeployOptions): Promise<Tx>;
 
@@ -328,4 +328,11 @@ export interface WalletInterface extends BridgeOperatorInterface {
    * Get the validator's commission rate for a pool.
    */
   getPoolCommission(poolAddress: Address): Promise<number>;
+
+  /**
+   * Get an EndurStaking instance for an LST asset (e.g. "STRK", "WBTC").
+   *
+   * `EndurStaking` mirrors the `Staking` API — use `enter`, `exitIntent`, `getPosition`, etc.
+   */
+  lstStaking(asset: string, options?: EndurStakingOptions): EndurStaking;
 }
