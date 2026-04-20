@@ -1454,7 +1454,9 @@ function buildToolErrorText(error: unknown): string {
     "Total ",
     "Could ",
     "Rate ",
-    "Sponsored ",
+    "Sponsored transfer",
+    "Sponsored execute",
+    "Deploy account post-check",
     "Transaction ",
     "Address ",
     "starkzap_",
@@ -1670,13 +1672,12 @@ async function handleTool(
           "Invalid build calls response from SDK: expected array."
         );
       }
-      const builtCalls = builtCallsResponse;
-      if (builtCalls.length !== requestedCalls.length) {
+      if (builtCallsResponse.length !== requestedCalls.length) {
         throw new Error(
-          `Invalid build calls response from SDK: expected ${requestedCalls.length} calls, received ${builtCalls.length}.`
+          `Invalid build calls response from SDK: expected ${requestedCalls.length} calls, received ${builtCallsResponse.length}.`
         );
       }
-      const normalizedCalls = builtCalls.map((call, index) =>
+      const normalizedCalls = builtCallsResponse.map((call, index) =>
         normalizeCallForResponse(call, index)
       );
       return ok({
