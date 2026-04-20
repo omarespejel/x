@@ -2,10 +2,14 @@ name: PR Agent
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, synchronize]
+    types: [opened, reopened, ready_for_review, synchronize, review_requested]
   issue_comment:
     types: [created]
   workflow_dispatch:
+
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   pr_agent_job:
@@ -14,15 +18,18 @@ jobs:
     permissions:
       issues: write
       pull-requests: write
-      contents: write
+      contents: read
     name: Run PR-Agent
+    timeout-minutes: 20
     steps:
       - name: PR Agent action step
         id: pragent
-        uses: qodo-ai/pr-agent@main
+        # qodo-ai/pr-agent v0.34, released 2026-04-02.
+        uses: qodo-ai/pr-agent@d82f7d3e696cd00822694aaa3096265d3889f3f1
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "true"
           github_action_config.auto_improve: "true"
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "review_requested", "synchronize"]'
