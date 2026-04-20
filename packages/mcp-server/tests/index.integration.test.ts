@@ -572,6 +572,77 @@ describe("index integration hardening", () => {
     );
   });
 
+  it("rejects oversized build-calls requests before SDK calls", async () => {
+    const txBuilder = {
+      add: vi.fn().mockImplementation(() => txBuilder),
+      calls: vi.fn(),
+    };
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue(txBuilder),
+    } as unknown as Wallet);
+
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_calls",
+        arguments: {
+          calls: [
+            {
+              contractAddress: "0x1",
+              entrypoint: "transfer",
+              calldata: Array.from({ length: 1025 }, () => "1"),
+            },
+            {
+              contractAddress: "0x2",
+              entrypoint: "transfer",
+              calldata: Array.from({ length: 1024 }, () => "1"),
+            },
+          ],
+        },
+      },
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain("Invalid build calls request");
+    expect(txBuilder.add).not.toHaveBeenCalled();
+    expect(txBuilder.calls).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized tx builder call responses from SDK", async () => {
+    const txBuilder = {
+      add: vi.fn().mockImplementation(() => txBuilder),
+      calls: vi.fn().mockResolvedValue([
+        {
+          contractAddress: "0x1",
+          entrypoint: "transfer",
+          calldata: Array.from({ length: 1025 }, () => "1"),
+        },
+        {
+          contractAddress: "0x2",
+          entrypoint: "transfer",
+          calldata: Array.from({ length: 1024 }, () => "1"),
+        },
+      ]),
+    };
+    testing.setWalletSingleton({
+      tx: vi.fn().mockReturnValue(txBuilder),
+    } as unknown as Wallet);
+
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_build_calls",
+        arguments: {
+          calls: [
+            { contractAddress: "0x1", entrypoint: "transfer" },
+            { contractAddress: "0x2", entrypoint: "transfer" },
+          ],
+        },
+      },
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain("total calldata items");
+  });
+
   it("rejects malformed commission percent in pool position responses", async () => {
     testing.setWalletSingleton({
       getPoolPosition: vi.fn().mockResolvedValue({

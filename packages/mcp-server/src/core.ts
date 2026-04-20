@@ -305,6 +305,8 @@ export const amountSchema = z
 
 export const ENTRYPOINT_IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 export const CALLDATA_ITEM_REGEX = /^(0x[0-9a-fA-F]{1,64}|[0-9]+)$/;
+export const MAX_BUILD_CALLS_TOTAL_CALLDATA_ITEMS = 2048;
+export const MAX_BUILD_CALLS_SERIALIZED_CHARS = 262_144;
 
 const entrypointSchema = z
   .string()

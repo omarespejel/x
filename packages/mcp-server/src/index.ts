@@ -39,6 +39,8 @@ import {
   FELT_REGEX,
   formatZodError,
   isClassHashNotFoundError,
+  MAX_BUILD_CALLS_SERIALIZED_CHARS,
+  MAX_BUILD_CALLS_TOTAL_CALLDATA_ITEMS,
   privateKeySchema,
   parseCliConfig,
   READ_ONLY_TOOLS,
@@ -759,6 +761,31 @@ function normalizeCallForResponse(
       )
     ),
   };
+}
+
+function assertBuildCallsBatchBounds(
+  calls: Array<{ calldata: string[] }>,
+  label: string
+): void {
+  const totalCalldataItems = calls.reduce(
+    (total, call) => total + call.calldata.length,
+    0
+  );
+  if (totalCalldataItems > MAX_BUILD_CALLS_TOTAL_CALLDATA_ITEMS) {
+    throw new Error(
+      `${label}: total calldata items ${totalCalldataItems} exceeds maximum ${MAX_BUILD_CALLS_TOTAL_CALLDATA_ITEMS}. Split the request into smaller batches.`
+    );
+  }
+
+  const responseChars = JSON.stringify({
+    callCount: calls.length,
+    calls,
+  }).length;
+  if (responseChars > MAX_BUILD_CALLS_SERIALIZED_CHARS) {
+    throw new Error(
+      `${label}: serialized size ${responseChars} exceeds maximum ${MAX_BUILD_CALLS_SERIALIZED_CHARS} characters. Split the request into smaller batches.`
+    );
+  }
 }
 
 function assertOverallFeeIsBigInt(fee: unknown): asserts fee is {
@@ -1673,6 +1700,10 @@ async function handleTool(
         entrypoint: call.entrypoint,
         calldata: call.calldata ?? [],
       }));
+      assertBuildCallsBatchBounds(
+        requestedCalls,
+        "Invalid build calls request"
+      );
       const txBuilder = wallet.tx();
       txBuilder.add(...requestedCalls);
       const builtCallsResponse = await withTimeout("Build calls query", () =>
@@ -1690,6 +1721,10 @@ async function handleTool(
       }
       const normalizedCalls = builtCallsResponse.map((call, index) =>
         normalizeCallForResponse(call, index)
+      );
+      assertBuildCallsBatchBounds(
+        normalizedCalls,
+        "Invalid build calls response from SDK"
       );
       return ok({
         callCount: normalizedCalls.length,
