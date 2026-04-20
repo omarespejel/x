@@ -477,26 +477,65 @@ async function assertWalletAccountClassHash(
   wallet: Wallet,
   context: string
 ): Promise<void> {
-  const provider = wallet.getProvider();
-  let deployedClassHash: string;
+  const deploymentStatus = await getWalletDeploymentStatus(
+    wallet,
+    "Wallet account class-hash verification"
+  );
+  if (!deploymentStatus.deployed) {
+    throw new Error(
+      `${context} succeeded but wallet account is still not deployed on-chain.`
+    );
+  }
+  const expectedClassHash = fromAddress(wallet.getClassHash());
+  if (deploymentStatus.deployedClassHash !== expectedClassHash) {
+    throw new Error(
+      `${context} detected account class hash mismatch at ${wallet.address}. expected=${expectedClassHash} actual=${deploymentStatus.deployedClassHash}`
+    );
+  }
+}
+
+type WalletDeploymentStatus =
+  | { deployed: false }
+  | { deployed: true; deployedClassHash: string };
+
+async function getWalletDeploymentStatus(
+  wallet: Wallet,
+  timeoutLabel: string
+): Promise<WalletDeploymentStatus> {
   try {
-    deployedClassHash = fromAddress(
-      await withTimeout("Wallet account class-hash verification", () =>
-        provider.getClassHashAt(wallet.address)
+    const deployedClassHash = fromAddress(
+      await withTimeout(timeoutLabel, () =>
+        wallet.getProvider().getClassHashAt(wallet.address)
       )
     );
+    return {
+      deployed: true,
+      deployedClassHash,
+    };
   } catch (error) {
     if (isClassHashNotFoundError(error)) {
-      throw new Error(
-        `${context} succeeded but wallet account is still not deployed on-chain.`
-      );
+      return { deployed: false };
     }
     throw error;
   }
+}
+
+async function assertWalletAccountClassHashIfDeployed(
+  wallet: Wallet,
+  context: string
+): Promise<void> {
+  const deploymentStatus = await getWalletDeploymentStatus(
+    wallet,
+    `${context} deployment check`
+  );
+  if (!deploymentStatus.deployed) {
+    return;
+  }
+
   const expectedClassHash = fromAddress(wallet.getClassHash());
-  if (deployedClassHash !== expectedClassHash) {
+  if (deploymentStatus.deployedClassHash !== expectedClassHash) {
     throw new Error(
-      `${context} detected account class hash mismatch at ${wallet.address}. expected=${expectedClassHash} actual=${deployedClassHash}`
+      `${context} detected account class hash mismatch at ${wallet.address}. expected=${expectedClassHash} actual=${deploymentStatus.deployedClassHash}`
     );
   }
 }
@@ -1720,11 +1759,9 @@ async function handleTool(
         maxBatchAmount
       );
 
-      const feeMode = parsed.sponsored
-        ? ({ type: "paymaster" } as const)
-        : undefined;
-      if (feeMode === "sponsored") {
-        await assertWalletAccountClassHash(
+      const feeMode = parsed.sponsored ? "sponsored" : undefined;
+      if (parsed.sponsored) {
+        await assertWalletAccountClassHashIfDeployed(
           wallet,
           "Sponsored transfer preflight"
         );
@@ -1764,11 +1801,9 @@ async function handleTool(
         entrypoint: call.entrypoint,
         calldata: call.calldata ?? [],
       }));
-      const feeMode = parsed.sponsored
-        ? ({ type: "paymaster" } as const)
-        : undefined;
-      if (feeMode === "sponsored") {
-        await assertWalletAccountClassHash(
+      const feeMode = parsed.sponsored ? "sponsored" : undefined;
+      if (parsed.sponsored) {
+        await assertWalletAccountClassHashIfDeployed(
           wallet,
           "Sponsored execute preflight"
         );
@@ -1815,8 +1850,11 @@ async function handleTool(
       const feeMode: "sponsored" | undefined = parsed.sponsored
         ? "sponsored"
         : undefined;
-      if (feeMode === "sponsored") {
-        await assertWalletAccountClassHash(wallet, "Sponsored swap preflight");
+      if (parsed.sponsored) {
+        await assertWalletAccountClassHashIfDeployed(
+          wallet,
+          "Sponsored swap preflight"
+        );
       }
       const tx = await withTimeout("Swap transaction submission", () =>
         wallet.swap(
@@ -1961,9 +1999,7 @@ async function handleTool(
           address: wallet.address,
         });
       }
-      const feeMode = parsed.sponsored
-        ? ({ type: "paymaster" } as const)
-        : undefined;
+      const feeMode = parsed.sponsored ? "sponsored" : undefined;
       const tx = await withTimeout("Account deployment submission", () =>
         wallet.deploy({
           ...(feeMode && { feeMode }),
