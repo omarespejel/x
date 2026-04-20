@@ -1,0 +1,71 @@
+# Fork-side review configuration for omarespejel/x.
+# Keep this minimal and focused on PR review quality. This config is intended for
+# the AI-review fork workflow and should not be synced to upstream StarkZap unless
+# maintainers explicitly want the same bot policy there.
+
+[config]
+response_language = "en-US"
+verbosity_level = 0
+large_patch_policy = "clip"
+reasoning_effort = "high"
+patch_extension_skip_types = [".md", ".txt"]
+ignore_pr_title = ["^\\[Auto\\]", "^Auto", "^WIP:"]
+ignore_pr_source_branches = ["^dependabot/"]
+
+[github_action_config]
+auto_review = true
+auto_describe = true
+auto_improve = true
+pr_actions = ["opened", "reopened", "ready_for_review", "review_requested", "synchronize"]
+
+[pr_reviewer]
+require_tests_review = true
+require_security_review = true
+require_ticket_analysis_review = true
+require_estimate_effort_to_review = true
+publish_output_no_suggestions = true
+persistent_comment = true
+num_max_findings = 8
+extra_instructions = """
+Review this repository as a production TypeScript/Starknet SDK and MCP codebase.
+Prioritize actionable issues over style feedback.
+For MCP changes, verify that tools are thin adapters over SDK methods, use strict Zod validation, preserve the starkzap_ namespace, gate writes behind explicit write flags, enforce configured amount/batch limits, avoid unbounded JSON responses, and do not duplicate protocol business logic in the MCP layer.
+For Starknet transaction paths, check account deployment assumptions, sponsored/gasless behavior, fee handling, calldata size limits, address/amount validation, and safe error messages.
+For tests, require focused unit tests for schema validation, write gating, failure paths, and regression cases from prior reviews.
+Flag any possible secret leakage, unsafe logging, mutable global state, or dependency/configuration change that affects CI or releases.
+"""
+
+[pr_description]
+use_bullet_points = true
+enable_pr_type = true
+enable_pr_diagram = false
+publish_labels = false
+extra_instructions = """
+Summarize the PR in terms of SDK/MCP surface, user-visible behavior, security gates, and tests run.
+Call out whether the change is fork-only automation/config or upstream product code.
+"""
+
+[pr_code_suggestions]
+focus_only_on_problems = true
+commitable_code_suggestions = false
+persistent_comment = true
+publish_output_no_suggestions = true
+max_number_of_calls = 3
+num_code_suggestions_per_chunk = 3
+extra_instructions = """
+Suggest only concrete fixes for correctness, security, robustness, test coverage, or API compatibility.
+Avoid cosmetic rewrites unless they reduce operational risk.
+"""
+
+# If the Qodo GitHub App / Qodo v2 is installed manually on this fork, these
+# commands enable the newer consolidated review flow while the GitHub Action
+# above continues to support the open-source PR-Agent path.
+[github_app]
+pr_commands = [
+  "/agentic_describe",
+  "/agentic_review",
+]
+handle_push_trigger = true
+push_commands = [
+  "/agentic_review",
+]
