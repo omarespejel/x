@@ -11,17 +11,18 @@ reasoning_effort = "high"
 patch_extension_skip_types = [".md", ".txt"]
 ignore_pr_title = ["^\\[Auto\\]", "^Auto", "^WIP:"]
 ignore_pr_source_branches = ["^dependabot/"]
+extract_issue_from_branch = false
 
 [github_action_config]
 auto_review = true
-auto_describe = true
-auto_improve = true
+auto_describe = false
+auto_improve = false
 pr_actions = ["opened", "reopened", "ready_for_review", "review_requested", "synchronize"]
 
 [pr_reviewer]
 require_tests_review = true
 require_security_review = true
-require_ticket_analysis_review = true
+require_ticket_analysis_review = false
 require_estimate_effort_to_review = true
 publish_output_no_suggestions = true
 persistent_comment = true
