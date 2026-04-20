@@ -488,10 +488,17 @@ function withTransactionReference(
   error: unknown,
   txResult: { hash: string; explorerUrl?: string }
 ): Error {
-  const reason = error instanceof Error ? error.message : String(error);
-  return new Error(
+  const reason =
+    error instanceof Error
+      ? error.message
+      : isRecord(error) && typeof error.message === "string"
+        ? error.message
+        : summarizeError(error);
+  const wrapped = new Error(
     `${reason} Transaction hash: ${txResult.hash}. Reconcile on-chain state before retrying.`
   );
+  (wrapped as Error & { cause?: unknown }).cause = error;
+  return wrapped;
 }
 
 async function assertWalletAccountClassHashAfterSubmission(
