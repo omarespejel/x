@@ -39,6 +39,7 @@ import {
   isClassHashNotFoundError,
   privateKeySchema,
   parseCliConfig,
+  PROVIDER_ID_REGEX,
   READ_ONLY_TOOLS,
   requireResourceBounds,
   schemas,
@@ -716,7 +717,6 @@ function assertSwapQuoteShape(quote: unknown): asserts quote is {
   priceImpactBps?: bigint | null;
   provider?: string;
 } {
-  const PROVIDER_ID_REGEX = /^[A-Za-z0-9._:-]+$/;
   if (!isRecord(quote)) {
     throw new Error(
       "Invalid swap quote returned by SDK: expected object shape."
@@ -772,6 +772,20 @@ function assertSwapQuoteShape(quote: unknown): asserts quote is {
   ) {
     throw new Error(
       "Invalid swap quote returned by SDK: provider must be a safe provider id."
+    );
+  }
+}
+
+function amountFromRawForSwapResponse(
+  raw: bigint,
+  token: Token,
+  context: string
+): ReturnType<typeof Amount.fromRaw> {
+  try {
+    return Amount.fromRaw(raw, token);
+  } catch (error) {
+    throw new Error(
+      `Invalid swap quote returned by SDK: ${context} could not be formatted. ${summarizeError(error)}`
     );
   }
 }
@@ -1579,7 +1593,10 @@ function buildToolErrorText(error: unknown): string {
     "Could ",
     "Rate ",
     "Duplicate ",
-    "Sponsored ",
+    "Sponsored transfer",
+    "Sponsored execute",
+    "Sponsored swap",
+    "Deploy account post-check",
     "Transaction ",
     "Address ",
     "Swap ",
@@ -1745,8 +1762,16 @@ async function handleTool(
         })
       );
       assertSwapQuoteShape(quote);
-      const quotedInAmount = Amount.fromRaw(quote.amountInBase, tokenIn);
-      const quotedOutAmount = Amount.fromRaw(quote.amountOutBase, tokenOut);
+      const quotedInAmount = amountFromRawForSwapResponse(
+        quote.amountInBase,
+        tokenIn,
+        "amountInBase"
+      );
+      const quotedOutAmount = amountFromRawForSwapResponse(
+        quote.amountOutBase,
+        tokenOut,
+        "amountOutBase"
+      );
       return ok({
         tokenIn: sanitizeTokenSymbol(tokenIn.symbol),
         tokenInAddress: tokenIn.address,
@@ -1885,7 +1910,11 @@ async function handleTool(
         })
       );
       assertSwapQuoteShape(quote);
-      const quotedOutAmount = Amount.fromRaw(quote.amountOutBase, tokenOut);
+      const quotedOutAmount = amountFromRawForSwapResponse(
+        quote.amountOutBase,
+        tokenOut,
+        "amountOutBase"
+      );
       const feeMode: "sponsored" | undefined = parsed.sponsored
         ? "sponsored"
         : undefined;

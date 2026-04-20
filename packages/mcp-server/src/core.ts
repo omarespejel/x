@@ -321,12 +321,14 @@ const tokenBatchSchema = z
   );
 
 const slippageBpsSchema = z.number().int().min(0).max(9999);
+export const PROVIDER_ID_REGEX = /^[A-Za-z0-9._:-]+$/;
+
 const providerSchema = z
   .string()
   .min(1)
   .max(64)
   .regex(
-    /^[A-Za-z0-9._:-]+$/,
+    PROVIDER_ID_REGEX,
     "Provider id may only contain letters, numbers, dot, underscore, colon, and hyphen"
   );
 
