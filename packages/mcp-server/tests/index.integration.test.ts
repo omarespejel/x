@@ -122,6 +122,7 @@ describe("index integration hardening", () => {
       .fn()
       .mockRejectedValueOnce(new Error("connection refused"))
       .mockResolvedValueOnce({
+        address: fromAddress("0x2"),
         disconnect: vi.fn().mockResolvedValue(undefined),
       });
 
@@ -145,6 +146,25 @@ describe("index integration hardening", () => {
     await expect(testing.getWallet()).resolves.toBeDefined();
     expect(connectWallet).toHaveBeenCalledTimes(2);
     expect(connectWallet).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        accountAddress: fromAddress("0x2"),
+      })
+    );
+  });
+
+  it("fails wallet init when SDK ignores the configured account override", async () => {
+    const connectWallet = vi.fn().mockResolvedValue({
+      address: fromAddress("0x3"),
+      disconnect: vi.fn().mockResolvedValue(undefined),
+    });
+
+    testing.setSdkSingleton({ connectWallet });
+    testing.setNowProvider(() => 10_000);
+
+    await expect(testing.getWallet()).rejects.toThrow(
+      /Requested account override/
+    );
+    expect(connectWallet).toHaveBeenCalledWith(
       expect.objectContaining({
         accountAddress: fromAddress("0x2"),
       })

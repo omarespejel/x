@@ -111,7 +111,15 @@ describe("sponsored write preflight hardening", () => {
     expect(result.content[0]?.text ?? "").toContain(
       "Sponsored transfer post-check succeeded but wallet account is still not deployed on-chain."
     );
+    expect(result.content[0]?.text ?? "").toContain("Transaction hash:");
     expect(transfer).toHaveBeenCalledOnce();
+    expect(transfer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        feeMode: "sponsored",
+      })
+    );
   });
 
   it("blocks sponsored transfer before submission when account class hash mismatches", async () => {
@@ -186,7 +194,14 @@ describe("sponsored write preflight hardening", () => {
     expect(result.content[0]?.text ?? "").toContain(
       "Sponsored execute post-check succeeded but wallet account is still not deployed on-chain."
     );
+    expect(result.content[0]?.text ?? "").toContain("Transaction hash:");
     expect(execute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        feeMode: "sponsored",
+      })
+    );
   });
 
   it("blocks sponsored execute before submission when account class hash mismatches", async () => {

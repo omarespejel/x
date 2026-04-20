@@ -6,6 +6,9 @@ import { z } from "zod";
 export const FELT_REGEX = /^0x[0-9a-fA-F]{1,64}$/;
 export const VALID_NETWORKS = ["mainnet", "sepolia"] as const;
 export type Network = (typeof VALID_NETWORKS)[number];
+const STARK_CURVE_ORDER = BigInt(
+  "0x0800000000000011000000000000000000000000000000000000000000000001"
+);
 
 export interface CliConfig {
   network: Network;
@@ -26,6 +29,23 @@ const tokensByNetwork: Record<Network, Record<string, Token>> = {
 export function normalizeStarknetAddress(address: string): string {
   return fromAddress(address).toLowerCase();
 }
+
+export function normalizePrivateKeyHex(value: string): string {
+  const hex = value.slice(2);
+  return `0x${hex.padStart(64, "0")}`;
+}
+
+export const privateKeySchema = z
+  .string()
+  .regex(
+    /^0x[0-9a-fA-F]{1,64}$/,
+    "Must be a 0x-prefixed hex private key (1-64 hex chars)"
+  )
+  .transform(normalizePrivateKeyHex)
+  .refine((value) => {
+    const key = BigInt(value);
+    return key !== 0n && key < STARK_CURVE_ORDER;
+  }, "Private key must be cryptographically valid (non-zero and less than Stark curve order)");
 
 function getReferenceToken(network: Network): Token {
   const tokens = tokensByNetwork[network];
