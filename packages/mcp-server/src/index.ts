@@ -37,6 +37,7 @@ import {
   FELT_REGEX,
   formatZodError,
   isClassHashNotFoundError,
+  privateKeySchema,
   parseCliConfig,
   READ_ONLY_TOOLS,
   requireResourceBounds,
@@ -53,9 +54,6 @@ const require = createRequire(import.meta.url);
 // CLI args
 // ---------------------------------------------------------------------------
 const cliArgs = process.argv.slice(2);
-const STARK_CURVE_ORDER = BigInt(
-  "0x0800000000000011000000000000000000000000000000000000000000000001"
-);
 
 const cliConfig = (() => {
   try {
@@ -81,23 +79,6 @@ const {
 // ---------------------------------------------------------------------------
 // Environment
 // ---------------------------------------------------------------------------
-function normalizePrivateKeyHex(value: string): string {
-  const hex = value.slice(2);
-  return `0x${hex.padStart(64, "0")}`;
-}
-
-const privateKeySchema = z
-  .string()
-  .regex(
-    /^0x[0-9a-fA-F]{1,64}$/,
-    "Must be a 0x-prefixed hex private key (1-64 hex chars)"
-  )
-  .transform(normalizePrivateKeyHex)
-  .refine((value) => {
-    const key = BigInt(value);
-    return key !== 0n && key < STARK_CURVE_ORDER;
-  }, "Private key must be cryptographically valid (non-zero and less than Stark curve order)");
-
 const contractAddressSchema = z
   .string()
   .regex(FELT_REGEX, "Must be a 0x-prefixed hex string (1-64 hex chars)")
@@ -450,6 +431,14 @@ async function getWallet(): Promise<Wallet> {
       })
     )
       .then((wallet) => {
+        if (
+          accountAddressOverride &&
+          fromAddress(wallet.address) !== accountAddressOverride
+        ) {
+          throw new Error(
+            `Requested account override ${accountAddressOverride}, but SDK connected ${fromAddress(wallet.address)}.`
+          );
+        }
         walletSingleton = wallet;
         walletInitFailureCount = 0;
         walletInitBackoffUntilMs = 0;
@@ -491,6 +480,28 @@ async function assertWalletAccountClassHash(
     throw new Error(
       `${context} detected account class hash mismatch at ${wallet.address}. expected=${expectedClassHash} actual=${deploymentStatus.deployedClassHash}`
     );
+  }
+}
+
+function withTransactionReference(
+  error: unknown,
+  txResult: { hash: string; explorerUrl?: string }
+): Error {
+  const reason = error instanceof Error ? error.message : String(error);
+  return new Error(
+    `${reason} Transaction hash: ${txResult.hash}. Reconcile on-chain state before retrying.`
+  );
+}
+
+async function assertWalletAccountClassHashAfterSubmission(
+  wallet: Wallet,
+  context: string,
+  txResult: { hash: string; explorerUrl?: string }
+): Promise<void> {
+  try {
+    await assertWalletAccountClassHash(wallet, context);
+  } catch (error) {
+    throw withTransactionReference(error, txResult);
   }
 }
 
@@ -650,6 +661,20 @@ function assertDistinctSwapTokens(
   }
 }
 
+function assertUniqueResolvedTokens(tokens: readonly Token[]): void {
+  const seen = new Map<string, string>();
+  for (const token of tokens) {
+    const normalizedAddress = fromAddress(token.address);
+    const previousSymbol = seen.get(normalizedAddress);
+    if (previousSymbol) {
+      throw new Error(
+        `Duplicate token requested after resolution: ${sanitizeTokenSymbol(previousSymbol)} and ${sanitizeTokenSymbol(token.symbol)} resolve to ${normalizedAddress}.`
+      );
+    }
+    seen.set(normalizedAddress, token.symbol);
+  }
+}
+
 async function mapWithConcurrencyLimit<T, R>(
   items: readonly T[],
   limit: number,
@@ -702,9 +727,19 @@ function assertSwapQuoteShape(quote: unknown): asserts quote is {
       "Invalid swap quote returned by SDK: amountInBase must be bigint."
     );
   }
+  if (quote.amountInBase <= 0n) {
+    throw new Error(
+      "Invalid swap quote returned by SDK: amountInBase must be a positive bigint."
+    );
+  }
   if (typeof quote.amountOutBase !== "bigint") {
     throw new Error(
       "Invalid swap quote returned by SDK: amountOutBase must be bigint."
+    );
+  }
+  if (quote.amountOutBase <= 0n) {
+    throw new Error(
+      "Invalid swap quote returned by SDK: amountOutBase must be a positive bigint."
     );
   }
   const routeCallCount = quote.routeCallCount;
@@ -1543,6 +1578,7 @@ function buildToolErrorText(error: unknown): string {
     "Total ",
     "Could ",
     "Rate ",
+    "Duplicate ",
     "Sponsored ",
     "Transaction ",
     "Address ",
@@ -1656,6 +1692,7 @@ async function handleTool(
       const resolvedTokens = parsed.tokens.map((tokenInput) =>
         resolveToken(tokenInput)
       );
+      assertUniqueResolvedTokens(resolvedTokens);
       const balances = await mapWithConcurrencyLimit(
         resolvedTokens,
         8,
@@ -1772,10 +1809,11 @@ async function handleTool(
         })
       );
       const txResult = await waitForTrackedTransaction(tx);
-      if (feeMode) {
-        await assertWalletAccountClassHash(
+      if (parsed.sponsored) {
+        await assertWalletAccountClassHashAfterSubmission(
           wallet,
-          "Sponsored transfer post-check"
+          "Sponsored transfer post-check",
+          txResult
         );
       }
       return ok({
@@ -1814,10 +1852,11 @@ async function handleTool(
         })
       );
       const txResult = await waitForTrackedTransaction(tx);
-      if (feeMode) {
-        await assertWalletAccountClassHash(
+      if (parsed.sponsored) {
+        await assertWalletAccountClassHashAfterSubmission(
           wallet,
-          "Sponsored execute post-check"
+          "Sponsored execute post-check",
+          txResult
         );
       }
       return ok({
@@ -1873,8 +1912,12 @@ async function handleTool(
         )
       );
       const txResult = await waitForTrackedTransaction(tx);
-      if (feeMode === "sponsored") {
-        await assertWalletAccountClassHash(wallet, "Sponsored swap post-check");
+      if (parsed.sponsored) {
+        await assertWalletAccountClassHashAfterSubmission(
+          wallet,
+          "Sponsored swap post-check",
+          txResult
+        );
       }
       return ok({
         hash: txResult.hash,
@@ -2006,7 +2049,11 @@ async function handleTool(
         })
       );
       const txResult = await waitForTrackedTransaction(tx);
-      await assertWalletAccountClassHash(wallet, "Deploy account post-check");
+      await assertWalletAccountClassHashAfterSubmission(
+        wallet,
+        "Deploy account post-check",
+        txResult
+      );
       return ok({
         status: "deployed",
         hash: txResult.hash,

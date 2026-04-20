@@ -45,6 +45,12 @@ function mismatchedProvider() {
   };
 }
 
+function deployedProvider() {
+  return {
+    getClassHashAt: vi.fn().mockResolvedValue(EXPECTED_CLASS_HASH),
+  };
+}
+
 function tx(hash: string) {
   return {
     hash,
@@ -128,7 +134,15 @@ describe("sponsored write preflight hardening", () => {
     expect(result.content[0]?.text ?? "").toContain(
       "Sponsored transfer post-check succeeded but wallet account is still not deployed on-chain."
     );
+    expect(result.content[0]?.text ?? "").toContain("Transaction hash:");
     expect(transfer).toHaveBeenCalledOnce();
+    expect(transfer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        feeMode: "sponsored",
+      })
+    );
   });
 
   it("blocks sponsored transfer before submission when account class hash mismatches", async () => {
@@ -185,7 +199,14 @@ describe("sponsored write preflight hardening", () => {
     expect(result.content[0]?.text ?? "").toContain(
       "Sponsored execute post-check succeeded but wallet account is still not deployed on-chain."
     );
+    expect(result.content[0]?.text ?? "").toContain("Transaction hash:");
     expect(execute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        feeMode: "sponsored",
+      })
+    );
   });
 
   it("blocks sponsored execute before submission when account class hash mismatches", async () => {
@@ -249,8 +270,59 @@ describe("sponsored write preflight hardening", () => {
     expect(result.content[0]?.text ?? "").toContain(
       "Sponsored swap post-check succeeded but wallet account is still not deployed on-chain."
     );
+    expect(result.content[0]?.text ?? "").toContain("Transaction hash:");
     expect(getQuote).toHaveBeenCalledOnce();
     expect(swap).toHaveBeenCalledOnce();
+    expect(swap).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        feeMode: "sponsored",
+      })
+    );
+  });
+
+  it("executes non-sponsored swap and reports the pretrade quote source", async () => {
+    const swap = vi.fn().mockResolvedValue(tx("0xabc"));
+    const getQuote = vi.fn().mockResolvedValue({
+      amountInBase: 100000000000000000n,
+      amountOutBase: 100000n,
+      provider: "avnu",
+    });
+    const wallet = {
+      address: WALLET_ADDRESS,
+      getClassHash: () => EXPECTED_CLASS_HASH,
+      getProvider: deployedProvider,
+      getQuote,
+      swap,
+    } as unknown as Wallet;
+
+    testing.setWalletSingleton(wallet);
+
+    const result = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_swap",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "0.1",
+        },
+      },
+    });
+
+    expect(result.isError).not.toBe(true);
+    const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
+      hash?: string;
+      amountOutRaw?: string;
+      amountOutSource?: string;
+    };
+    expect(payload.hash).toBe(
+      "0x0000000000000000000000000000000000000000000000000000000000000abc"
+    );
+    expect(payload.amountOutRaw).toBe("100000");
+    expect(payload.amountOutSource).toBe("pretrade_quote");
+    expect(getQuote).toHaveBeenCalledOnce();
+    expect(swap).toHaveBeenCalledOnce();
+    expect(swap).toHaveBeenCalledWith(expect.anything(), {});
   });
 
   it("blocks sponsored swap before submission when account class hash mismatches", async () => {

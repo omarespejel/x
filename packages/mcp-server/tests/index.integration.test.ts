@@ -129,6 +129,7 @@ describe("index integration hardening", () => {
       .fn()
       .mockRejectedValueOnce(new Error("connection refused"))
       .mockResolvedValueOnce({
+        address: fromAddress("0x2"),
         disconnect: vi.fn().mockResolvedValue(undefined),
       });
 
@@ -152,6 +153,25 @@ describe("index integration hardening", () => {
     await expect(testing.getWallet()).resolves.toBeDefined();
     expect(connectWallet).toHaveBeenCalledTimes(2);
     expect(connectWallet).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        accountAddress: fromAddress("0x2"),
+      })
+    );
+  });
+
+  it("fails wallet init when SDK ignores the configured account override", async () => {
+    const connectWallet = vi.fn().mockResolvedValue({
+      address: fromAddress("0x3"),
+      disconnect: vi.fn().mockResolvedValue(undefined),
+    });
+
+    testing.setSdkSingleton({ connectWallet });
+    testing.setNowProvider(() => 10_000);
+
+    await expect(testing.getWallet()).rejects.toThrow(
+      /Requested account override/
+    );
+    expect(connectWallet).toHaveBeenCalledWith(
       expect.objectContaining({
         accountAddress: fromAddress("0x2"),
       })
@@ -426,6 +446,26 @@ describe("index integration hardening", () => {
     ).toBe(true);
   });
 
+  it("rejects semantically duplicate tokens in batched balances", async () => {
+    const balanceOf = vi.fn();
+    testing.setWalletSingleton({
+      balanceOf,
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_get_balances",
+        arguments: {
+          tokens: [KNOWN_MAINNET_TOKEN.symbol, KNOWN_MAINNET_TOKEN.address],
+        },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain(
+      "Duplicate token requested after resolution"
+    );
+    expect(balanceOf).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed swap quote responses from SDK", async () => {
     testing.setWalletSingleton({
       getQuote: vi.fn().mockResolvedValue({
@@ -470,6 +510,30 @@ describe("index integration hardening", () => {
     expect(response.isError).toBe(true);
     expect(response.content[0]?.text).toContain(
       "Invalid swap quote returned by SDK: provider must be a safe provider id."
+    );
+  });
+
+  it("rejects non-positive swap quote amounts from SDK", async () => {
+    testing.setWalletSingleton({
+      getQuote: vi.fn().mockResolvedValue({
+        amountInBase: 1n,
+        amountOutBase: 0n,
+        provider: "avnu",
+      }),
+    } as unknown as Wallet);
+    const response = await testing.handleCallToolRequest({
+      params: {
+        name: "starkzap_get_quote",
+        arguments: {
+          tokenIn: "STRK",
+          tokenOut: "USDC",
+          amountIn: "1",
+        },
+      },
+    });
+    expect(response.isError).toBe(true);
+    expect(response.content[0]?.text).toContain(
+      "amountOutBase must be a positive bigint"
     );
   });
 
