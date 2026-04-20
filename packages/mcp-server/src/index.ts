@@ -1567,10 +1567,8 @@ async function handleTool(
         maxBatchAmount
       );
 
-      const feeMode = parsed.sponsored
-        ? ({ type: "paymaster" } as const)
-        : undefined;
-      if (feeMode === "sponsored") {
+      const feeMode = parsed.sponsored ? "sponsored" : undefined;
+      if (parsed.sponsored) {
         await assertWalletAccountClassHashIfDeployed(
           wallet,
           "Sponsored transfer preflight"
@@ -1611,10 +1609,8 @@ async function handleTool(
         entrypoint: call.entrypoint,
         calldata: call.calldata ?? [],
       }));
-      const feeMode = parsed.sponsored
-        ? ({ type: "paymaster" } as const)
-        : undefined;
-      if (feeMode === "sponsored") {
+      const feeMode = parsed.sponsored ? "sponsored" : undefined;
+      if (parsed.sponsored) {
         await assertWalletAccountClassHashIfDeployed(
           wallet,
           "Sponsored execute preflight"
@@ -1694,9 +1690,7 @@ async function handleTool(
           address: wallet.address,
         });
       }
-      const feeMode = parsed.sponsored
-        ? ({ type: "paymaster" } as const)
-        : undefined;
+      const feeMode = parsed.sponsored ? "sponsored" : undefined;
       const tx = await withTimeout("Account deployment submission", () =>
         wallet.deploy({
           ...(feeMode && { feeMode }),
