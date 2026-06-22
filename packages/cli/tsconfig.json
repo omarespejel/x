@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": "dist",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "es2020",
+    "strict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src/**/*", "tests/**/*", "../mcp-server/src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
